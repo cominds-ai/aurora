@@ -1,4 +1,5 @@
 import asyncio
+import os
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -21,6 +22,7 @@ from core.config import get_settings
 settings = get_settings()
 API_ROOT = Path(__file__).resolve().parents[1]
 ALEMBIC_INI_PATH = API_ROOT / "alembic.ini"
+SKIP_STARTUP_MIGRATIONS = os.getenv("SKIP_STARTUP_MIGRATIONS", "").lower() in {"1", "true", "yes"}
 
 # 2.初始化日志系统
 setup_logging()
@@ -45,10 +47,13 @@ async def lifespan(app: FastAPI):
     logger.info("Aurora正在初始化")
 
     # 2.运行数据库迁移(将数据同步到生产环境)
-    logger.info("Aurora正在执行数据库迁移")
-    alembic_cfg = Config(str(ALEMBIC_INI_PATH))
-    command.upgrade(alembic_cfg, "head")
-    logger.info("Aurora数据库迁移完成")
+    if SKIP_STARTUP_MIGRATIONS:
+        logger.info("Aurora跳过启动阶段数据库迁移")
+    else:
+        logger.info("Aurora正在执行数据库迁移")
+        alembic_cfg = Config(str(ALEMBIC_INI_PATH))
+        command.upgrade(alembic_cfg, "head")
+        logger.info("Aurora数据库迁移完成")
 
     # 3.初始化Redis/Postgres/OSS客户端
     logger.info("Aurora正在初始化Redis")

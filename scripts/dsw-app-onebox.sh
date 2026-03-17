@@ -243,6 +243,7 @@ start_api() {
     nohup env \
       PYTHONPATH="$APP_ROOT/api" \
       PATH="$HOME/.local/bin:/usr/local/bin:$PATH" \
+      SKIP_STARTUP_MIGRATIONS=1 \
       uv run --project "$APP_ROOT/api" bash ./run.sh \
       >"$LOG_DIR/api.log" 2>&1 &
     echo $! >"$RUN_DIR/api.pid"
