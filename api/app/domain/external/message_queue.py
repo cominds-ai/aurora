@@ -13,7 +13,11 @@ class MessageQueue(Protocol):
         ...
 
     async def pop(self) -> Tuple[str, Any]:
-        """获取并移除消息队列中的第一条消息"""
+        """消费消息队列中的第一条消息，成功处理后需要显式ACK"""
+        ...
+
+    async def ack(self, message_id: str) -> bool:
+        """确认指定消息已被成功处理"""
         ...
 
     async def clear(self) -> None:

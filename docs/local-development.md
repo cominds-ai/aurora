@@ -33,6 +33,12 @@ cd /Users/tianxiaobo/comind/aurora
 ./scripts/dev-up.sh
 ```
 
+如需只启动不跟日志：
+
+```bash
+./scripts/dev-up.sh --no-follow-logs
+```
+
 这个脚本会：
 
 - 使用 `.env.example` 作为本地环境变量文件
@@ -49,8 +55,9 @@ cd /Users/tianxiaobo/comind/aurora
 说明：
 
 - `./scripts/dev-up.sh` 会在后台启动本地 API 和 UI
-- 启动完成后，脚本会继续前台跟随 API、UI 和基础设施日志
-- 按 `Ctrl+C` 会直接停止本地 API、UI 和 Docker 基础设施
+- 默认会在当前窗口持续跟随 API、UI 和基础设施日志
+- 如需只启动不跟日志，使用 `./scripts/dev-up.sh --no-follow-logs`
+- 默认模式下按 `Ctrl+C` 会直接停止本地 API、UI 和 Docker 基础设施
 
 默认访问地址：
 
@@ -123,7 +130,7 @@ docker compose logs -f aurora-sandbox
 
 停止本地环境：
 
-- 直接在 `./scripts/dev-up.sh` 运行窗口按 `Ctrl+C`
+- 执行 `./scripts/dev-down.sh`
 
 如果需要重新启动：
 

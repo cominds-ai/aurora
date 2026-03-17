@@ -209,6 +209,7 @@ start_sandbox() {
       ENV=production \
       LOG_LEVEL="$SANDBOX_LOG_LEVEL" \
       SERVER_TIMEOUT_MINUTES="$SANDBOX_TIMEOUT_MINUTES" \
+      SANDBOX_ROOT="$SANDBOX_ROOT" \
       LANG=zh_CN.UTF-8 \
       LANGUAGE=zh_CN:zh \
       LC_ALL=zh_CN.UTF-8 \

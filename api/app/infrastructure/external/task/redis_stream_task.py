@@ -25,8 +25,16 @@ class RedisStreamTask(Task):
         input_stream_name = f"task:input:{self._id}"
         output_stream_name = f"task:output:{self._id}"
 
-        self._input_stream = RedisStreamMessageQueue(input_stream_name)
-        self._output_stream = RedisStreamMessageQueue(output_stream_name)
+        self._input_stream = RedisStreamMessageQueue(
+            input_stream_name,
+            consumer_group_name=f"{input_stream_name}:group",
+            consumer_name=f"task-runner:{self._id}",
+        )
+        self._output_stream = RedisStreamMessageQueue(
+            output_stream_name,
+            consumer_group_name=f"{output_stream_name}:group",
+            consumer_name=f"task-client:{self._id}",
+        )
 
         # 将当前类实例注册到全局变量中
         RedisStreamTask._task_registry[self._id] = self
@@ -107,9 +115,8 @@ class RedisStreamTask(Task):
 
     @classmethod
     async def destroy(cls) -> None:
-        for task_id in RedisStreamTask._task_registry:
+        for task in list(RedisStreamTask._task_registry.values()):
             # 1.获取对应的任务
-            task = RedisStreamTask._task_registry[task_id]
             task.cancel()
 
             # 2.检测任务是否有任务运行器

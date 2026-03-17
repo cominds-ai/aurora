@@ -6,14 +6,54 @@ LOG_DIR="$ROOT_DIR/.logs/dev"
 SANDBOX_HASH_FILE="$LOG_DIR/sandbox-image.hash"
 FOLLOW_PIDS=()
 SHUTDOWN_DONE=0
+FOLLOW_LOGS=1
+CLEANUP_ON_EXIT=1
 COMPOSE_PROJECT="aurora-local"
 COMPOSE_ENV_FILE=".env.example"
+SCRIPT_TTY=""
 export AURORA_SANDBOX_IMAGE="aurora-sandbox-local"
 export AURORA_REDIS_VOLUME="aurora_local_redis_data"
 export AURORA_POSTGRES_VOLUME="aurora_local_postgres_data"
 export AURORA_NETWORK_NAME="aurora-local-network"
 
 mkdir -p "$LOG_DIR"
+
+if [ -t 1 ]; then
+  SCRIPT_TTY="$(tty 2>/dev/null || true)"
+fi
+
+if [ -n "$SCRIPT_TTY" ] && [ -w "$SCRIPT_TTY" ]; then
+  exec 3>"$SCRIPT_TTY"
+else
+  exec 3>&1
+fi
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --follow-logs|-f)
+      FOLLOW_LOGS=1
+      ;;
+    --no-follow-logs|-d)
+      FOLLOW_LOGS=0
+      ;;
+    --help|-h)
+      cat <<'EOF'
+Usage: ./scripts/dev-up.sh [--follow-logs|--no-follow-logs]
+
+Options:
+  --follow-logs, -f     Keep streaming API/UI/infra logs in the foreground.
+  --no-follow-logs, -d  Start services and exit after startup.
+  --help, -h            Show this help.
+EOF
+      exit 0
+      ;;
+    *)
+      echo "[aurora] unknown argument: $1"
+      exit 1
+      ;;
+  esac
+  shift
+done
 
 cleanup_followers() {
   for pid in "${FOLLOW_PIDS[@]:-}"; do
@@ -50,7 +90,7 @@ stop_pid_file() {
 }
 
 shutdown_all() {
-  if [ "$SHUTDOWN_DONE" -eq 1 ]; then
+  if [ "$CLEANUP_ON_EXIT" -eq 0 ] || [ "$SHUTDOWN_DONE" -eq 1 ]; then
     return
   fi
   SHUTDOWN_DONE=1
@@ -171,7 +211,7 @@ start_api() {
       UV_CACHE_DIR="/tmp/aurora-uv-cache" \
       uv run --project "$ROOT_DIR/api" \
       uvicorn app.main:app --app-dir "$ROOT_DIR/api" --host 0.0.0.0 --port 8000 --timeout-graceful-shutdown 0 \
-      >"$LOG_DIR/api.log" 2>&1 &
+      </dev/null >"$LOG_DIR/api.log" 2>&1 &
     echo $! >"$LOG_DIR/api.pid"
   )
 }
@@ -184,7 +224,7 @@ start_ui() {
     nohup env \
       NEXT_PUBLIC_API_BASE_URL="http://localhost:8000/api" \
       npm run dev -- --hostname 0.0.0.0 --port 3000 \
-      >"$LOG_DIR/ui.log" 2>&1 &
+      </dev/null >"$LOG_DIR/ui.log" 2>&1 &
     echo $! >"$LOG_DIR/ui.pid"
   )
 }
@@ -195,7 +235,7 @@ follow_file() {
   touch "$file"
   (
     tail -n 40 -F "$file" 2>/dev/null | while IFS= read -r line; do
-      printf '[%s] %s\n' "$label" "$line"
+      printf '[%s] %s\n' "$label" "$line" >&3
     done
   ) &
   FOLLOW_PIDS+=("$!")
@@ -204,7 +244,7 @@ follow_file() {
 follow_infra_logs() {
   (
     docker compose -p "$COMPOSE_PROJECT" --env-file "$COMPOSE_ENV_FILE" logs -f --tail=20 aurora-postgres aurora-redis aurora-sandbox 2>/dev/null | while IFS= read -r line; do
-      printf '[infra] %s\n' "$line"
+      printf '[infra] %s\n' "$line" >&3
     done
   ) &
   FOLLOW_PIDS+=("$!")
@@ -284,7 +324,16 @@ echo "[aurora] api: http://localhost:8000/api"
 echo "[aurora] api docs: http://localhost:8000/docs"
 echo "[aurora] api log: $LOG_DIR/api.log"
 echo "[aurora] ui log: $LOG_DIR/ui.log"
-echo "[aurora] following logs, press Ctrl+C to stop log streaming"
+
+if [ "$FOLLOW_LOGS" -eq 0 ]; then
+  echo "[aurora] startup complete"
+  echo "[aurora] stop services: ./scripts/dev-down.sh"
+  echo "[aurora] stream logs: ./scripts/dev-up.sh --follow-logs"
+  CLEANUP_ON_EXIT=0
+  exit 0
+fi
+
+echo "[aurora] following logs, press Ctrl+C to stop log streaming and local services"
 
 follow_file "api" "$LOG_DIR/api.log"
 follow_file "ui" "$LOG_DIR/ui.log"

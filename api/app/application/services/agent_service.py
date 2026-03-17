@@ -180,14 +180,19 @@ class AgentService:
             while task and not task.done:
                 # 12.从输出消息队列中获取数据
                 event_id, event_str = await task.output_stream.get(start_id=latest_event_id, block_ms=0)
-                latest_event_id = event_id
                 if event_str is None:
                     logger.debug(f"在会话[{session_id}]输出队列中未发现事件内容")
                     continue
+                latest_event_id = event_id
 
                 # 13.使用Pydantic提供的类型适配器将event_str转换为指定类实例
-                event = TypeAdapter(Event).validate_json(event_str)
-                event.id = event_id
+                try:
+                    event = TypeAdapter(Event).validate_json(event_str)
+                    event.id = event_id
+                except Exception as parse_err:
+                    logger.warning(f"会话[{session_id}]输出事件解析失败, event_id={event_id}, error={parse_err}")
+                    await task.output_stream.ack(event_id)
+                    continue
                 logger.debug(f"从会话[{session_id}]中获取事件: {type(event).__name__}")
 
                 # 14.将未读消息数重置为0
@@ -196,6 +201,7 @@ class AgentService:
 
                 # 15.将事件返回并判断事件类型是否为结束类型
                 yield event
+                await task.output_stream.ack(event_id)
                 if isinstance(event, (DoneEvent, ErrorEvent, WaitEvent)):
                     break
 

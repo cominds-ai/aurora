@@ -35,7 +35,9 @@ Aurora 是一个面向多用户的 AI Agent 平台，支持本地开发和阿里
 - API 使用本机 `uv` 启动
 - UI 使用本机 `npm` 启动
 - 默认直接读取 [`.env.example`](/Users/tianxiaobo/comind/aurora/.env.example)，不需要先复制 `.env`
-- `Ctrl+C` 会直接停止本地 API、UI 和基础设施
+- 默认会在当前窗口持续输出日志
+- 如需只启动不跟日志，使用 `./scripts/dev-up.sh --no-follow-logs`
+- 停止本地服务使用 `./scripts/dev-down.sh`
 
 生产环境默认读取 `.env`。
 

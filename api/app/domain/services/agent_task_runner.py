@@ -84,19 +84,19 @@ class AgentTaskRunner(TaskRunner):
             await self._uow.session.add_event(self._session_id, event)
 
     @classmethod
-    async def _pop_event(cls, task: Task) -> Event:
+    async def _pop_event(cls, task: Task) -> tuple[str | None, Event | None]:
         """从任务的输入流中获取事件信息"""
         # 1.从任务task中读取数据
         event_id, event_str = await task.input_stream.pop()
         if event_str is None:
             logger.warning(f"AgentTaskRunner接收到空消息")
-            return
+            return event_id, None
 
         # 2.使用pydantic+type类型将字符串转换成事件
         event = TypeAdapter(Event).validate_json(event_str)
         event.id = event_id
 
-        return event
+        return event_id, event
 
     async def _sync_file_to_sandbox(self, file_id: str) -> File:
         """根据文件id将文件同步到沙箱中"""
@@ -354,8 +354,14 @@ class AgentTaskRunner(TaskRunner):
             # 2.循环读取任务中的输入消息队列
             while not await task.input_stream.is_empty():
                 # 3.从输入流中获取数据
-                event = await self._pop_event(task)
+                input_event_id, event = await self._pop_event(task)
+                if event is None:
+                    if input_event_id:
+                        await task.input_stream.ack(input_event_id)
+                    continue
+
                 message = ""
+                should_wait_for_user = False
 
                 # 4.判断事件类型是否为消息事件，如果是则处理消息并将附件同步到沙箱中
                 if isinstance(event, MessageEvent):
@@ -399,11 +405,18 @@ class AgentTaskRunner(TaskRunner):
                         # 10.如果事件为等待，则更新会话状态并终止程序
                         async with self._uow:
                             await self._uow.session.update_status(self._session_id, SessionStatus.WAITING)
-                        return
+                        should_wait_for_user = True
+                        break
 
                     # 11.判断如果输入消息队列为空则跳出循环
                     if not await task.input_stream.is_empty():
                         break
+
+                if input_event_id:
+                    await task.input_stream.ack(input_event_id)
+
+                if should_wait_for_user:
+                    return
 
             # 12.更新会话状态为已完成
             async with self._uow:
