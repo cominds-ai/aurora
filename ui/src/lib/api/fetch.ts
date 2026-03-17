@@ -1,5 +1,5 @@
 import type { ApiResponse } from "./types";
-import { getAccessToken } from "@/lib/auth";
+import { clearAuthSession, getAccessToken } from "@/lib/auth";
 
 /**
  * API 配置
@@ -30,6 +30,16 @@ type RequestOptions = RequestInit & {
   timeout?: number;
   skipErrorHandler?: boolean;
 };
+
+const AUTH_ERROR_MESSAGES = new Set([
+  "未登录",
+  "登录已失效，请重新登录",
+  "当前用户不存在",
+]);
+
+function isAuthenticationError(code: number, msg: string): boolean {
+  return code === 401 || AUTH_ERROR_MESSAGES.has(msg);
+}
 
 /**
  * 解析响应
@@ -64,6 +74,10 @@ async function handleErrorResponse(response: Response): Promise<never> {
       msg: response.statusText || "请求失败",
       data: null,
     };
+  }
+
+  if (isAuthenticationError(response.status, errorData.msg)) {
+    clearAuthSession();
   }
   
   throw new ApiError(errorData.code, errorData.msg, errorData.data);
@@ -159,6 +173,9 @@ export async function request<T = unknown>(
 
     // 处理业务错误（code 不在成功范围内）
     if (result.code !== 0 && result.code !== 200) {
+      if (isAuthenticationError(result.code, result.msg)) {
+        clearAuthSession();
+      }
       if (skipErrorHandler) {
         return result.data as T;
       }

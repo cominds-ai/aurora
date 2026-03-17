@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { SidebarProvider } from '@/components/ui/sidebar'
 import { SessionsProvider } from '@/providers/sessions-provider'
 import { LeftPanel } from '@/components/left-panel'
-import { isAuthenticated } from '@/lib/auth'
+import { getAuthSnapshot, subscribeAuthChange } from '@/lib/auth'
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -15,14 +15,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
-    const loggedIn = isAuthenticated()
-    setAuthenticated(loggedIn)
-    setReady(true)
+    const syncAuth = () => {
+      setAuthenticated(getAuthSnapshot().authenticated)
+      setReady(true)
+    }
 
-    if (!loggedIn && pathname !== '/') {
+    syncAuth()
+    return subscribeAuthChange(syncAuth)
+  }, [])
+
+  useEffect(() => {
+    if (!ready) return
+
+    if (!authenticated && pathname !== '/') {
       router.replace('/')
     }
-  }, [pathname, router])
+  }, [authenticated, pathname, ready, router])
 
   if (!ready) {
     return <div className="h-screen flex items-center justify-center text-gray-500">加载中...</div>

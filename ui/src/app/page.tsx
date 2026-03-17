@@ -10,7 +10,7 @@ import {Input} from '@/components/ui/input'
 import {authApi} from '@/lib/api/auth'
 import {sessionApi} from '@/lib/api/session'
 import type {FileInfo} from '@/lib/api/types'
-import {getAccessToken, setAccessToken} from '@/lib/auth'
+import {clearAuthSession, getAuthSnapshot, setAuthSession, subscribeAuthChange} from '@/lib/auth'
 import {toast} from 'sonner'
 
 export default function Page() {
@@ -23,9 +23,48 @@ export default function Page() {
   const [username, setUsername] = useState('')
 
   useEffect(() => {
-    const token = getAccessToken()
-    setAuthenticated(Boolean(token))
-    setCheckingAuth(false)
+    let mounted = true
+
+    const syncAuth = () => {
+      if (!mounted) return
+      setAuthenticated(getAuthSnapshot().authenticated)
+    }
+
+    const unsubscribe = subscribeAuthChange(syncAuth)
+
+    const bootstrap = async () => {
+      const snapshot = getAuthSnapshot()
+      syncAuth()
+
+      if (!snapshot.accessToken) {
+        if (mounted) {
+          setCheckingAuth(false)
+        }
+        return
+      }
+
+      try {
+        const user = await authApi.me()
+        if (!mounted) return
+        setAuthSession(snapshot.accessToken, user)
+        setAuthenticated(true)
+      } catch {
+        if (!mounted) return
+        clearAuthSession()
+        setAuthenticated(false)
+      } finally {
+        if (mounted) {
+          setCheckingAuth(false)
+        }
+      }
+    }
+
+    bootstrap()
+
+    return () => {
+      mounted = false
+      unsubscribe()
+    }
   }, [])
 
   const handleQuestionClick = (question: string) => {
@@ -45,7 +84,7 @@ export default function Page() {
         username: username.trim(),
         password: '123456',
       })
-      setAccessToken(result.token.access_token)
+      setAuthSession(result.token.access_token, result.user)
       setAuthenticated(true)
       toast.success(`已登录为 ${result.user.display_name}`)
     } catch (error) {

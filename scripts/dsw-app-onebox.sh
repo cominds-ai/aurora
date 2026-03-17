@@ -296,6 +296,9 @@ start_ui() {
     npm install
   )
 
+  log "cleaning previous ui build artifacts..."
+  rm -rf "$APP_ROOT/ui/.next"
+
   log "building ui..."
   (
     cd "$APP_ROOT/ui"
