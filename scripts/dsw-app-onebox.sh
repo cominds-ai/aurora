@@ -243,12 +243,16 @@ start_api() {
     nohup env \
       PYTHONPATH="$APP_ROOT/api" \
       PATH="$HOME/.local/bin:/usr/local/bin:$PATH" \
-      uv run --project "$APP_ROOT/api" ./run.sh \
+      uv run --project "$APP_ROOT/api" bash ./run.sh \
       >"$LOG_DIR/api.log" 2>&1 &
     echo $! >"$RUN_DIR/api.pid"
   )
 
-  wait_for_http "http://127.0.0.1:${API_PORT}/api/status" "api" 60
+  if ! wait_for_http "http://127.0.0.1:${API_PORT}/api/status" "api" 60; then
+    log "api failed to start, recent log:"
+    tail -n 80 "$LOG_DIR/api.log" || true
+    exit 1
+  fi
 }
 
 start_ui() {
@@ -278,7 +282,13 @@ start_ui() {
     echo $! >"$RUN_DIR/ui.pid"
   )
 
-  wait_for_http "http://127.0.0.1:${UI_PORT}" "ui" 60
+  if ! wait_for_http "http://127.0.0.1:${UI_PORT}" "ui" 60; then
+    log "ui failed to start, recent build log:"
+    tail -n 80 "$LOG_DIR/ui-build.log" || true
+    log "ui failed to start, recent runtime log:"
+    tail -n 80 "$LOG_DIR/ui.log" || true
+    exit 1
+  fi
 }
 
 main() {
