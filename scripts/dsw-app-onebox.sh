@@ -41,6 +41,33 @@ require_command() {
   fi
 }
 
+ensure_port_free() {
+  local port="$1"
+  local label="$2"
+  local pids
+
+  pids="$(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)"
+  if [ -z "$pids" ]; then
+    return
+  fi
+
+  for pid in $pids; do
+    local cmd
+    cmd="$(ps -p "$pid" -o command= 2>/dev/null || true)"
+    log "stopping stale $label listener on port $port (pid=$pid)"
+    log "command: ${cmd:-unknown}"
+    kill "$pid" 2>/dev/null || true
+  done
+
+  sleep 1
+
+  if lsof -tiTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
+    log "force stopping remaining listener on port $port"
+    lsof -tiTCP:"$port" -sTCP:LISTEN | xargs kill -9 2>/dev/null || true
+    sleep 1
+  fi
+}
+
 stop_pid_file() {
   local pid_file="$1"
   if [ -f "$pid_file" ]; then
@@ -226,6 +253,7 @@ EOF
 
 start_api() {
   stop_pid_file "$RUN_DIR/api.pid"
+  ensure_port_free "$API_PORT" "api"
   : >"$LOG_DIR/api.log"
 
   log "syncing api dependencies..."
@@ -258,6 +286,7 @@ start_api() {
 
 start_ui() {
   stop_pid_file "$RUN_DIR/ui.pid"
+  ensure_port_free "$UI_PORT" "ui"
   : >"$LOG_DIR/ui-build.log"
   : >"$LOG_DIR/ui.log"
 
