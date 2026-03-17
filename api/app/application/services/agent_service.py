@@ -177,10 +177,12 @@ class AgentService:
             logger.info(f"会话[{session_id}]任务实例: {task}")
 
             # 11.从任务的输出流中读取数据
-            while task and not task.done:
+            while task:
                 # 12.从输出消息队列中获取数据
                 event_id, event_str = await task.output_stream.get(start_id=latest_event_id, block_ms=0)
                 if event_str is None:
+                    if task.done:
+                        break
                     logger.debug(f"在会话[{session_id}]输出队列中未发现事件内容")
                     continue
                 latest_event_id = event_id

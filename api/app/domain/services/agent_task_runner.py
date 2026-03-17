@@ -408,8 +408,9 @@ class AgentTaskRunner(TaskRunner):
                         should_wait_for_user = True
                         break
 
-                    # 11.判断如果输入消息队列为空则跳出循环
-                    if not await task.input_stream.is_empty():
+                    # 11.当前输入消息在ACK前仍会留在stream里。
+                    # 只有出现“额外的新消息”时才中断当前处理，避免第一条输出后被提前截断。
+                    if await task.input_stream.size() > 1:
                         break
 
                 if input_event_id:
