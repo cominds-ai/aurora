@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG_DIR="$ROOT_DIR/.logs/dev"
 SANDBOX_HASH_FILE="$LOG_DIR/sandbox-image.hash"
+SANDBOX_META_FILE="$LOG_DIR/sandbox-image.meta"
 FOLLOW_PIDS=()
 SHUTDOWN_DONE=0
 FOLLOW_LOGS=1
@@ -11,6 +12,7 @@ CLEANUP_ON_EXIT=1
 COMPOSE_PROJECT="aurora-local"
 COMPOSE_ENV_FILE=".env.example"
 SCRIPT_TTY=""
+HOST_DOCKER_PLATFORM=""
 export AURORA_SANDBOX_IMAGE="aurora-sandbox-local"
 export AURORA_REDIS_VOLUME="aurora_local_redis_data"
 export AURORA_POSTGRES_VOLUME="aurora_local_postgres_data"
@@ -27,6 +29,15 @@ if [ -n "$SCRIPT_TTY" ] && [ -w "$SCRIPT_TTY" ]; then
 else
   exec 3>&1
 fi
+
+case "$(uname -m)" in
+  arm64|aarch64)
+    HOST_DOCKER_PLATFORM="linux/arm64"
+    ;;
+  x86_64|amd64)
+    HOST_DOCKER_PLATFORM="linux/amd64"
+    ;;
+esac
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -54,6 +65,14 @@ EOF
   esac
   shift
 done
+
+run_docker() {
+  if [ -n "$HOST_DOCKER_PLATFORM" ]; then
+    DOCKER_DEFAULT_PLATFORM="$HOST_DOCKER_PLATFORM" "$@"
+    return
+  fi
+  "$@"
+}
 
 cleanup_followers() {
   for pid in "${FOLLOW_PIDS[@]:-}"; do
@@ -103,7 +122,7 @@ shutdown_all() {
 
   (
     cd "$ROOT_DIR"
-    docker compose -p "$COMPOSE_PROJECT" --env-file "$COMPOSE_ENV_FILE" down >/dev/null 2>&1 || true
+    run_docker docker compose -p "$COMPOSE_PROJECT" --env-file "$COMPOSE_ENV_FILE" down >/dev/null 2>&1 || true
   )
 
   echo "[aurora] all local services stopped"
@@ -187,16 +206,23 @@ compute_sandbox_hash() {
 ensure_sandbox_image() {
   local current_hash
   local previous_hash=""
+  local current_meta
+  local previous_meta=""
 
   current_hash="$(compute_sandbox_hash)"
+  current_meta="${current_hash}|${HOST_DOCKER_PLATFORM}"
   if [ -f "$SANDBOX_HASH_FILE" ]; then
     previous_hash="$(cat "$SANDBOX_HASH_FILE")"
   fi
+  if [ -f "$SANDBOX_META_FILE" ]; then
+    previous_meta="$(cat "$SANDBOX_META_FILE")"
+  fi
 
-  if ! docker image inspect "$AURORA_SANDBOX_IMAGE" >/dev/null 2>&1 || [ "$current_hash" != "$previous_hash" ]; then
+  if ! run_docker docker image inspect "$AURORA_SANDBOX_IMAGE" >/dev/null 2>&1 || [ "$current_hash" != "$previous_hash" ] || [ "$current_meta" != "$previous_meta" ]; then
     echo "[aurora] rebuilding sandbox image..."
-    docker compose -p "$COMPOSE_PROJECT" --env-file "$COMPOSE_ENV_FILE" build aurora-sandbox
+    run_docker docker compose -p "$COMPOSE_PROJECT" --env-file "$COMPOSE_ENV_FILE" build aurora-sandbox
     printf '%s' "$current_hash" >"$SANDBOX_HASH_FILE"
+    printf '%s' "$current_meta" >"$SANDBOX_META_FILE"
   fi
 }
 
@@ -243,7 +269,7 @@ follow_file() {
 
 follow_infra_logs() {
   (
-    docker compose -p "$COMPOSE_PROJECT" --env-file "$COMPOSE_ENV_FILE" logs -f --tail=20 aurora-postgres aurora-redis aurora-sandbox 2>/dev/null | while IFS= read -r line; do
+    run_docker docker compose -p "$COMPOSE_PROJECT" --env-file "$COMPOSE_ENV_FILE" logs -f --tail=20 aurora-postgres aurora-redis aurora-sandbox 2>/dev/null | while IFS= read -r line; do
       printf '[infra] %s\n' "$line" >&3
     done
   ) &
@@ -270,6 +296,9 @@ fi
 echo "[aurora] expected python version: 3.13.9"
 echo "[aurora] expected node version: 22.14.0"
 echo "[aurora] local env file: .env.example"
+if [ -n "$HOST_DOCKER_PLATFORM" ]; then
+  echo "[aurora] docker platform: $HOST_DOCKER_PLATFORM"
+fi
 echo "[aurora] starting local infrastructure with docker compose..."
 
 cd "$ROOT_DIR"
@@ -280,11 +309,11 @@ ensure_port_free 3000 "ui"
 
 ensure_sandbox_image
 
-docker compose -p "$COMPOSE_PROJECT" --env-file "$COMPOSE_ENV_FILE" up -d aurora-postgres aurora-redis aurora-sandbox
+run_docker docker compose -p "$COMPOSE_PROJECT" --env-file "$COMPOSE_ENV_FILE" up -d aurora-postgres aurora-redis aurora-sandbox
 
 wait_for_port 127.0.0.1 5432 "postgres"
 wait_for_port 127.0.0.1 6379 "redis"
-if ! wait_for_http "http://127.0.0.1:8080/api/supervisor/status" "sandbox" 30; then
+if ! wait_for_http "http://127.0.0.1:8080/api/supervisor/status" "sandbox" 60; then
   echo "[aurora] sandbox failed to start, check: docker compose -p $COMPOSE_PROJECT --env-file $COMPOSE_ENV_FILE logs aurora-sandbox"
   exit 1
 fi

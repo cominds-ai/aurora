@@ -84,17 +84,22 @@ class RedisStreamMessageQueue(MessageQueue):
 
     async def get(self, start_id: str = None, block_ms: int = None) -> Tuple[str, Any]:
         """从redis-stream获取一条数据，成功消费后需要显式ACK"""
-        if start_id:
-            logger.debug(
-                "消息队列[%s]在Consumer Group模式下忽略start_id=%s",
-                self._stream_name,
-                start_id,
-            )
-
         logger.debug("从消息队列[%s]中获取一条消息", self._stream_name)
 
         try:
-            return await self._read_from_group(block_ms=block_ms)
+            while True:
+                message_id, message = await self._read_from_group(block_ms=block_ms)
+                if message_id is None:
+                    return None, None
+
+                # SSE重连时，客户端会把最后一个已收到的event_id带回来。
+                # 这时如果该消息仍处于pending，需要先ACK后再继续读取下一条，避免重复投递。
+                if start_id and message_id == start_id:
+                    await self.ack(message_id)
+                    start_id = None
+                    continue
+
+                return message_id, message
         except Exception as exc:
             logger.error("从消息队列[%s]获取数据失败: %s", self._stream_name, exc)
             return None, None
