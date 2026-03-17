@@ -1,0 +1,60 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.cursor/
+
+# Local environment files
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Logs / runtime state
+.logs/
+*.log
+*.pid
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+build/
+dist/
+wheels/
+*.egg-info/
+
+# uv / virtualenv
+.uv-cache/
+.venv/
+api/.uv-cache/
+api/.venv/
+sandbox/.venv/
+
+# Node.js / frontend
+node_modules/
+ui/node_modules/
+ui/.next/
+ui/out/
+ui/build/
+ui/coverage/
+*.tsbuildinfo
+
+# Local generated assets
+.pycache/
+issue-image/
+
+# Keep checked-in version markers
+!.python-version
+!.nvmrc
+!ui/.nvmrc
+!api/.python-version
+!sandbox/.python-version
