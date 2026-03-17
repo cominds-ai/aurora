@@ -105,7 +105,7 @@ ensure_apt_packages() {
   $SUDO apt-get update
   $SUDO apt-get install -y \
     curl wget ca-certificates gnupg software-properties-common \
-    supervisor xterm socat xvfb x11vnc websockify chromium \
+    supervisor xterm socat xvfb x11vnc websockify \
     fonts-noto-cjk fonts-noto-color-emoji language-pack-zh-hans locales \
     netcat-openbsd lsof
 }
@@ -115,6 +115,18 @@ ensure_locale() {
     log "generating locale zh_CN.UTF-8..."
     $SUDO locale-gen zh_CN.UTF-8
   fi
+}
+
+ensure_chromium() {
+  if command -v chromium >/dev/null 2>&1; then
+    log "chromium already installed: $(chromium --version | head -n 1)"
+    return
+  fi
+
+  log "installing chromium..."
+  /usr/bin/python3.10 /usr/bin/add-apt-repository ppa:xtradeb/apps -y
+  $SUDO apt-get update
+  $SUDO apt-get install -y chromium --no-install-recommends
 }
 
 ensure_node() {
@@ -221,6 +233,7 @@ main() {
 
   ensure_apt_packages
   ensure_locale
+  ensure_chromium
   ensure_node
   ensure_uv
   ensure_ubuntu_user
