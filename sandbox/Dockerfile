@@ -84,6 +84,7 @@ COPY supervisord.conf /etc/supervisor/conf.d/sandbox.conf
 EXPOSE 8080 9222 5900 5901
 
 # 17.额外的环境变量配置
+ENV SANDBOX_ROOT=/sandbox
 ENV CHROME_ARGS=""
 ENV UVI_ARGS=""
 
