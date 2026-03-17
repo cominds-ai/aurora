@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_ROOT="$ROOT_DIR"
 STATE_ROOT="${AURORA_STATE_ROOT:-$(cd "$ROOT_DIR/.." && pwd)/aurora-state}"
+SECRETS_FILE="${AURORA_SECRETS_FILE:-$(cd "$ROOT_DIR/.." && pwd)/.aurora-secrets.env}"
 LOG_DIR="$STATE_ROOT/logs"
 RUN_DIR="$STATE_ROOT/run"
 POSTGRES_DATA="$STATE_ROOT/postgres"
@@ -301,6 +302,13 @@ main() {
   set -a
   # shellcheck disable=SC1090
   source "$ENV_FILE"
+  if [ -f "$SECRETS_FILE" ]; then
+    log "loading secrets file: $SECRETS_FILE"
+    # shellcheck disable=SC1090
+    source "$SECRETS_FILE"
+  else
+    log "secrets file not found, continuing without it: $SECRETS_FILE"
+  fi
   set +a
 
   start_api
@@ -310,6 +318,7 @@ main() {
 [aurora-dsw] one-box app stack started
 [aurora-dsw] app root: $APP_ROOT
 [aurora-dsw] state root: $STATE_ROOT
+[aurora-dsw] secrets file: $SECRETS_FILE
 [aurora-dsw] ui url: http://127.0.0.1:${UI_PORT}
 [aurora-dsw] api url: http://127.0.0.1:${API_PORT}/api
 [aurora-dsw] api public base: ${NEXT_PUBLIC_API_BASE_URL}

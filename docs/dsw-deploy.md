@@ -160,6 +160,7 @@ cd aurora
 
 - 代码已经 clone 到 DSW 实例内，例如 `/cpfs/user/fh/aurora`
 - 计划将持久化数据放在代码同级目录，例如 `/cpfs/user/fh/aurora-state`
+- 如果不想把 OSS 密钥写进仓库，可在代码同级目录单独放 secrets 文件，例如 `/cpfs/user/fh/.aurora-secrets.env`
 - 已经在 DSW 控制台为该实例准备好 `3000` 和 `8000` 的自定义服务
 - `NEXT_PUBLIC_API_BASE_URL` 必须显式传入，值应为该实例对外暴露的 API 地址，例如 `http://<api-service-host>:8000/api`
 
@@ -169,6 +170,26 @@ cd aurora
 cd /cpfs/user/fh/aurora
 chmod +x ./scripts/dsw-app-onebox.sh
 NEXT_PUBLIC_API_BASE_URL=http://<api-service-host>:8000/api ./scripts/dsw-app-onebox.sh
+```
+
+可选的 secrets 文件示例：
+
+```bash
+cat > /cpfs/user/fh/.aurora-secrets.env <<'EOF'
+OSS_ENDPOINT=oss-cn-shanghai-internal.aliyuncs.com
+OSS_ACCESS_KEY_ID=<your-ak>
+OSS_ACCESS_KEY_SECRET=<your-sk>
+OSS_BUCKET_NAME=lsh-oss-agi-tool-platform
+OSS_SCHEME=https
+EOF
+```
+
+脚本和后端配置会自动读取这个文件；如果你想换位置，也可以在启动前显式传：
+
+```bash
+AURORA_SECRETS_FILE=/cpfs/user/fh/.aurora-secrets.env \
+NEXT_PUBLIC_API_BASE_URL=http://<api-service-host>:8000/api \
+./scripts/dsw-app-onebox.sh
 ```
 
 脚本会自动完成：

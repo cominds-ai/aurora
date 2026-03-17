@@ -7,12 +7,23 @@ from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-def _resolve_env_file() -> str:
+def _resolve_env_files() -> tuple[str, ...]:
     env = os.getenv("ENV", "development").lower()
     project_root = Path(__file__).resolve().parents[2]
+    default_secrets_file = project_root.parent / ".aurora-secrets.env"
+    secrets_file = os.getenv("AURORA_SECRETS_FILE")
+
     if env == "production":
-        return str(project_root / ".env")
-    return str(project_root / ".env.example")
+        env_files = [str(project_root / ".env")]
+    else:
+        env_files = [str(project_root / ".env.example")]
+
+    if secrets_file:
+        env_files.append(secrets_file)
+    elif default_secrets_file.exists():
+        env_files.append(str(default_secrets_file))
+
+    return tuple(env_files)
 
 
 class Settings(BaseSettings):
@@ -64,7 +75,7 @@ class Settings(BaseSettings):
 
     # 使用pydantic v2的写法来完成环境变量信息的告知
     model_config = SettingsConfigDict(
-        env_file=_resolve_env_file(),
+        env_file=_resolve_env_files(),
         env_file_encoding="utf-8",
         extra="ignore",
     )
