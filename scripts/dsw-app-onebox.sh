@@ -305,6 +305,7 @@ start_ui() {
   (
     cd "$APP_ROOT/ui"
     npm install --no-save lightningcss-linux-x64-gnu@1.30.2
+    npm install --no-save @tailwindcss/oxide-linux-x64-gnu@4.1.18
   )
 
   log "cleaning previous ui build artifacts..."
