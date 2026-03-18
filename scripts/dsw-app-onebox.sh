@@ -340,7 +340,12 @@ start_ui() {
   log "installing ui dependencies in standalone mode..."
   (
     cd "$APP_ROOT/ui"
-    npm_config_workspaces=false npm install --include=optional
+    env \
+      -u npm_config_workspace \
+      -u npm_config_workspaces \
+      -u NPM_CONFIG_WORKSPACE \
+      -u NPM_CONFIG_WORKSPACES \
+      npm install --include=optional --package-lock=false
   )
 
   if [ ! -f "$lightning_native" ] || [ ! -f "$tailwind_native" ]; then
