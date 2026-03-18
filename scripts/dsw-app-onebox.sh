@@ -3,6 +3,7 @@ set -euo pipefail
 
 SOURCE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_ROOT="${AURORA_RUNTIME_ROOT:-/root/aurora-runtime}"
+UI_ROOT="${AURORA_UI_RUNTIME_ROOT:-/root/aurora-ui-runtime}"
 STATE_ROOT="${AURORA_STATE_ROOT:-$(cd "$SOURCE_ROOT/.." && pwd)/aurora-state}"
 SECRETS_FILE="${AURORA_SECRETS_FILE:-$(cd "$SOURCE_ROOT/.." && pwd)/.aurora-secrets.env}"
 LOG_DIR="$STATE_ROOT/logs"
@@ -285,6 +286,14 @@ sync_source_to_runtime() {
     --exclude 'ui/.next/' \
     --exclude 'ui/package-lock.json' \
     "$SOURCE_ROOT/" "$APP_ROOT/"
+
+  log "syncing ui source to standalone runtime directory..."
+  mkdir -p "$UI_ROOT"
+  rsync -a --delete \
+    --exclude 'node_modules/' \
+    --exclude '.next/' \
+    --exclude 'package-lock.json' \
+    "$SOURCE_ROOT/ui/" "$UI_ROOT/"
 }
 
 start_api() {
@@ -324,28 +333,52 @@ start_api() {
 }
 
 start_ui() {
-  local lightning_native="$APP_ROOT/ui/node_modules/lightningcss-linux-x64-gnu/lightningcss.linux-x64-gnu.node"
-  local tailwind_native="$APP_ROOT/ui/node_modules/@tailwindcss/oxide-linux-x64-gnu/tailwindcss-oxide.linux-x64-gnu.node"
+  local lightning_native="$UI_ROOT/node_modules/lightningcss-linux-x64-gnu/lightningcss.linux-x64-gnu.node"
+  local tailwind_native="$UI_ROOT/node_modules/@tailwindcss/oxide-linux-x64-gnu/tailwindcss-oxide.linux-x64-gnu.node"
+  local npm_userconfig="$RUN_DIR/npmrc.empty"
+  local npm_home="${HOME:-/root}"
+  local npm_lang="${LANG:-C.UTF-8}"
+  local npm_term="${TERM:-dumb}"
 
   stop_pid_file "$RUN_DIR/ui.pid"
   ensure_port_free "$UI_PORT" "ui"
   : >"$LOG_DIR/ui-build.log"
   : >"$LOG_DIR/ui.log"
+  : >"$npm_userconfig"
 
   log "cleaning previous ui install artifacts..."
-  safe_remove_path "$APP_ROOT/ui/node_modules"
-  safe_remove_path "$APP_ROOT/ui/.next"
-  safe_remove_path "$APP_ROOT/ui/package-lock.json"
+  safe_remove_path "$UI_ROOT/node_modules"
+  safe_remove_path "$UI_ROOT/.next"
+  safe_remove_path "$UI_ROOT/package-lock.json"
 
   log "installing ui dependencies in standalone mode..."
   (
-    cd "$APP_ROOT/ui"
-    env \
-      -u npm_config_workspace \
-      -u npm_config_workspaces \
-      -u NPM_CONFIG_WORKSPACE \
-      -u NPM_CONFIG_WORKSPACES \
-      npm install --include=optional --package-lock=false
+    cd "$UI_ROOT"
+    env -i \
+      HOME="$npm_home" \
+      PATH="$PATH" \
+      TERM="$npm_term" \
+      LANG="$npm_lang" \
+      LC_ALL="$npm_lang" \
+      NPM_CONFIG_USERCONFIG="$npm_userconfig" \
+      npm_config_workspaces=false \
+      npm install --include=optional --package-lock=false --workspaces=false
+  )
+
+  log "ensuring ui linux native dependencies..."
+  (
+    cd "$UI_ROOT"
+    env -i \
+      HOME="$npm_home" \
+      PATH="$PATH" \
+      TERM="$npm_term" \
+      LANG="$npm_lang" \
+      LC_ALL="$npm_lang" \
+      NPM_CONFIG_USERCONFIG="$npm_userconfig" \
+      npm_config_workspaces=false \
+      npm install --package-lock=false --no-save \
+        lightningcss-linux-x64-gnu@1.30.2 \
+        @tailwindcss/oxide-linux-x64-gnu@4.1.18
   )
 
   if [ ! -f "$lightning_native" ] || [ ! -f "$tailwind_native" ]; then
@@ -357,7 +390,7 @@ start_ui() {
 
   log "building ui..."
   if ! (
-    cd "$APP_ROOT/ui"
+    cd "$UI_ROOT"
     NEXT_PUBLIC_API_BASE_URL="$NEXT_PUBLIC_API_BASE_URL" npm run build >"$LOG_DIR/ui-build.log" 2>&1
   ); then
     log "ui build failed, recent build log:"
@@ -367,7 +400,7 @@ start_ui() {
 
   log "starting ui..."
   (
-    cd "$APP_ROOT/ui"
+    cd "$UI_ROOT"
     nohup env \
       NEXT_PUBLIC_API_BASE_URL="$NEXT_PUBLIC_API_BASE_URL" \
       npm run start -- --hostname 0.0.0.0 --port "$UI_PORT" \
@@ -422,6 +455,7 @@ main() {
   cat <<EOF
 [aurora-dsw] one-box app stack started
 [aurora-dsw] app root: $APP_ROOT
+[aurora-dsw] ui root: $UI_ROOT
 [aurora-dsw] state root: $STATE_ROOT
 [aurora-dsw] secrets file: $SECRETS_FILE
 [aurora-dsw] ui url: http://127.0.0.1:${UI_PORT}
