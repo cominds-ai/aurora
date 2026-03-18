@@ -290,26 +290,29 @@ start_api() {
 }
 
 start_ui() {
+  local lightning_native="$APP_ROOT/ui/node_modules/lightningcss-linux-x64-gnu/lightningcss.linux-x64-gnu.node"
+  local tailwind_native="$APP_ROOT/ui/node_modules/@tailwindcss/oxide-linux-x64-gnu/tailwindcss-oxide.linux-x64-gnu.node"
+
   stop_pid_file "$RUN_DIR/ui.pid"
   ensure_port_free "$UI_PORT" "ui"
   : >"$LOG_DIR/ui-build.log"
   : >"$LOG_DIR/ui.log"
 
-  log "installing ui dependencies..."
-  (
-    cd "$APP_ROOT"
-    npm install --workspace @aurora/ui
-  )
+  log "cleaning previous ui install artifacts..."
+  rm -rf "$APP_ROOT/ui/node_modules" "$APP_ROOT/ui/.next" "$APP_ROOT/ui/package-lock.json"
 
-  log "ensuring linux native css runtime..."
+  log "installing ui dependencies in standalone mode..."
   (
     cd "$APP_ROOT/ui"
-    npm install --no-save lightningcss-linux-x64-gnu@1.30.2
-    npm install --no-save @tailwindcss/oxide-linux-x64-gnu@4.1.18
+    npm_config_workspaces=false npm install --include=optional
   )
 
-  log "cleaning previous ui build artifacts..."
-  rm -rf "$APP_ROOT/ui/.next"
+  if [ ! -f "$lightning_native" ] || [ ! -f "$tailwind_native" ]; then
+    log "ui linux native dependencies are missing after install"
+    log "expected: $lightning_native"
+    log "expected: $tailwind_native"
+    exit 1
+  fi
 
   log "building ui..."
   if ! (
