@@ -297,18 +297,28 @@ start_ui() {
 
   log "installing ui dependencies..."
   (
+    cd "$APP_ROOT"
+    npm install --workspace @aurora/ui
+  )
+
+  log "ensuring linux native css runtime..."
+  (
     cd "$APP_ROOT/ui"
-    npm install
+    npm install --no-save lightningcss-linux-x64-gnu@1.30.2
   )
 
   log "cleaning previous ui build artifacts..."
   rm -rf "$APP_ROOT/ui/.next"
 
   log "building ui..."
-  (
+  if ! (
     cd "$APP_ROOT/ui"
     NEXT_PUBLIC_API_BASE_URL="$NEXT_PUBLIC_API_BASE_URL" npm run build >"$LOG_DIR/ui-build.log" 2>&1
-  )
+  ); then
+    log "ui build failed, recent build log:"
+    tail -n 120 "$LOG_DIR/ui-build.log" || true
+    exit 1
+  fi
 
   log "starting ui..."
   (

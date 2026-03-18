@@ -171,7 +171,7 @@ cd aurora
 ```bash
 cd /cpfs/user/fh/aurora
 chmod +x ./scripts/dsw-app-onebox.sh
-NEXT_PUBLIC_API_BASE_URL=http://<api-service-host>:8000/api ./scripts/dsw-app-onebox.sh
+NEXT_PUBLIC_API_BASE_URL=http://47.237.68.223:8013/api ./scripts/dsw-app-onebox.sh
 ```
 
 可选的 secrets 文件示例：
