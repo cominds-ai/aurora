@@ -28,6 +28,8 @@ fi
 
 export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"
 export DEBIAN_FRONTEND=noninteractive
+export UV_CACHE_DIR="$APP_ROOT/.uv-cache"
+export UV_PYTHON_INSTALL_DIR="$APP_ROOT/.uv-python"
 
 log() {
   printf '[aurora-dsw] %s\n' "$*"
@@ -257,22 +259,25 @@ start_api() {
   : >"$LOG_DIR/api.log"
 
   log "syncing api dependencies..."
-  uv sync --project "$APP_ROOT/api"
+  (
+    cd "$APP_ROOT"
+    uv sync --package api --python 3.13.9
+  )
 
   log "running alembic migrations..."
   (
-    cd "$APP_ROOT/api"
-    PYTHONPATH="$APP_ROOT/api" uv run --project "$APP_ROOT/api" alembic upgrade head
+    cd "$APP_ROOT"
+    PYTHONPATH="$APP_ROOT/api" uv run --package api --python 3.13.9 alembic -c "$APP_ROOT/api/alembic.ini" upgrade head
   )
 
   log "starting api..."
   (
-    cd "$APP_ROOT/api"
+    cd "$APP_ROOT"
     nohup env \
       PYTHONPATH="$APP_ROOT/api" \
       PATH="$HOME/.local/bin:/usr/local/bin:$PATH" \
       SKIP_STARTUP_MIGRATIONS=1 \
-      uv run --project "$APP_ROOT/api" bash ./run.sh \
+      uv run --package api --python 3.13.9 bash ./api/run.sh \
       >"$LOG_DIR/api.log" 2>&1 &
     echo $! >"$RUN_DIR/api.pid"
   )

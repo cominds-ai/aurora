@@ -1,0 +1,23 @@
+{
+  "name": "aurora",
+  "private": true,
+  "workspaces": [
+    "ui"
+  ],
+  "engines": {
+    "node": "22.14.0"
+  },
+  "scripts": {
+    "sync:py": "uv sync --all-packages --python 3.13.9",
+    "install:ui": "npm install --workspace @aurora/ui",
+    "bootstrap": "npm run sync:py && npm run install:ui",
+    "dev": "./scripts/dev-up.sh",
+    "dev:detach": "./scripts/dev-up.sh --no-follow-logs",
+    "dev:down": "./scripts/dev-down.sh",
+    "dev:api": "uv run --package api --python 3.13.9 uvicorn app.main:app --app-dir ./api --host 0.0.0.0 --port 8000 --reload --reload-dir ./api --timeout-graceful-shutdown 0",
+    "dev:ui": "npm run dev --workspace @aurora/ui",
+    "build": "npm run build --workspace @aurora/ui",
+    "lint": "npm run lint --workspace @aurora/ui"
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+}

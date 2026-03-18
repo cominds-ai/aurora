@@ -33,7 +33,7 @@ api/
 ├── .env                   # 环境变量
 ├── config.yaml            # 应用配置（LLM、MCP、A2A）
 ├── Dockerfile
-├── requirements.txt
+├── pyproject.toml
 └── run.sh                 # 启动脚本
 ```
 
@@ -56,8 +56,9 @@ api/
 ### 环境准备
 
 ```bash
-# 1. 使用 uv 同步依赖
-uv sync
+# 1. 在仓库根目录同步 monorepo Python workspace
+cd /Users/tianxiaobo/comind/aurora
+uv sync --all-packages --python 3.13.9
 ```
 
 ### 配置环境变量
@@ -77,7 +78,7 @@ SANDBOX_ADDRESS=localhost
 
 ```bash
 # 启动开发服务器
-uv run uvicorn app.main:app --app-dir . --host 0.0.0.0 --port 8000 --reload
+uv run --package api --python 3.13.9 uvicorn app.main:app --app-dir /Users/tianxiaobo/comind/aurora/api --host 0.0.0.0 --port 8000 --reload
 ```
 
 服务启动后访问 `http://localhost:8000/docs` 查看 API 文档。

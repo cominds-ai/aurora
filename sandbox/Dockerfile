@@ -4,7 +4,9 @@ FROM ubuntu:22.04
 # 2.安装过程避免交互式提示并设置主机名
 ENV DEBIAN_FRONTEND=noninteractive
 ENV HOSTNAME=sandbox
-ENV PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
+ENV UV_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
+ENV NODE_PATH=/workspace/sandbox/node_modules
+ENV PATH=/workspace/.venv/bin:/workspace/sandbox/node_modules/.bin:$PATH
 
 # 3.将ubuntu默认的apt软件源地址统一换成阿里云镜像源
 RUN sed -i 's|http://archive.ubuntu.com/ubuntu/|http://mirrors.aliyun.com/ubuntu/|g' /etc/apt/sources.list && \
@@ -13,7 +15,7 @@ RUN sed -i 's|http://archive.ubuntu.com/ubuntu/|http://mirrors.aliyun.com/ubuntu
 
 # 4.更新和安装基础软件后并移除依赖
 RUN apt-get update && apt-get install -y \
-    sudo bc curl wget gnupg software-properties-common supervisor \
+    sudo bc curl wget gnupg software-properties-common supervisor build-essential \
     xterm socat xvfb x11vnc websockify\
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
@@ -27,7 +29,7 @@ RUN add-apt-repository ppa:deadsnakes/ppa && \
     apt-get update && \
     apt-get install -y python3.13 python3.13-venv python3.13-dev && \
     python3.13 -m ensurepip --upgrade && \
-    python3.13 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    python3.13 -m pip install --no-cache-dir --upgrade pip setuptools wheel uv && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -68,25 +70,24 @@ ENV LANG=zh_CN.UTF-8 \
     LC_ALL=zh_CN.UTF-8
 
 # 12.设置工作空间
-WORKDIR /sandbox
+WORKDIR /workspace
 
-# 13.拷贝项目依赖文件到工作空间并安装依赖
-COPY requirements.txt .
-RUN python3.13 -m pip install --no-cache-dir -r requirements.txt
-
-# 14.拷贝当前整个项目文件
+# 13.拷贝当前整个项目文件并通过根级 uv workspace 安装依赖
 COPY . .
+RUN uv sync --package sandbox --python 3.13.9 --no-dev && \
+    npm install --prefix /workspace/sandbox
 
-# 15.将supervisord.conf拷贝至supervisor服务配置目录中
-COPY supervisord.conf /etc/supervisor/conf.d/sandbox.conf
+# 14.将supervisord.conf拷贝至supervisor服务配置目录中
+COPY sandbox/supervisord.conf /etc/supervisor/conf.d/sandbox.conf
 
-# 16.暴露端口: 8080(FastAPI) 9222(CDP) 5900(vnc)
+# 15.暴露端口: 8080(FastAPI) 9222(CDP) 5900(vnc)
 EXPOSE 8080 9222 5900 5901
 
-# 17.额外的环境变量配置
-ENV SANDBOX_ROOT=/sandbox
+# 16.额外的环境变量配置
+ENV WORKSPACE_ROOT=/workspace
+ENV SANDBOX_ROOT=/workspace/sandbox
 ENV CHROME_ARGS=""
 ENV UVI_ARGS=""
 
-# 18.使用supervisor管理所有进程
-CMD ["/usr/bin/supervisord", "-n", "-c", "/sandbox/supervisord.conf"]
+# 17.使用supervisor管理所有进程
+CMD ["/usr/bin/supervisord", "-n", "-c", "/workspace/sandbox/supervisord.conf"]

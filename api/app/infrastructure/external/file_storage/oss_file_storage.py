@@ -56,3 +56,6 @@ class OSSFileStorage(FileStorage):
             raise ValueError(f"文件不存在: {file_id}")
         response = await run_in_threadpool(self.oss.client.get_object, file.key)
         return response, file
+
+    async def get_file_url(self, file: File) -> str:
+        return self.oss.get_object_url(file.key)

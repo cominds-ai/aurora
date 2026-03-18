@@ -12,6 +12,8 @@ from app.application.services.sandbox_service import SandboxService
 from app.application.services.session_service import SessionService
 from app.application.services.status_service import StatusService
 from app.domain.models.user import User
+from app.domain.external.file_storage import FileStorage
+from app.infrastructure.external.file_storage.local_file_storage import LocalFileStorage
 from app.infrastructure.external.file_storage.oss_file_storage import OSSFileStorage
 from app.infrastructure.external.health_checker.postgres_health_checker import PostgresHealthChecker
 from app.infrastructure.external.health_checker.redis_health_checker import RedisHealthChecker
@@ -77,15 +79,24 @@ def get_status_service(
     return StatusService(checkers=[postgres_checker, redis_checker])
 
 
+def build_file_storage(user_id: str, oss: OSS) -> FileStorage:
+    if oss.is_configured:
+        return OSSFileStorage(
+            oss=oss,
+            uow_factory=get_uow,
+            user_id=user_id,
+        )
+    return LocalFileStorage(
+        uow_factory=get_uow,
+        user_id=user_id,
+    )
+
+
 def get_file_service(
         current_user: User = Depends(get_current_user),
         oss: OSS = Depends(get_oss),
 ) -> FileService:
-    file_storage = OSSFileStorage(
-        oss=oss,
-        uow_factory=get_uow,
-        user_id=current_user.id,
-    )
+    file_storage = build_file_storage(current_user.id, oss)
 
     return FileService(
         uow_factory=get_uow,
@@ -113,11 +124,7 @@ def get_agent_service(
         oss: OSS = Depends(get_oss),
         sandbox_service: SandboxService = Depends(get_sandbox_service),
 ) -> AgentService:
-    file_storage = OSSFileStorage(
-        oss=oss,
-        uow_factory=get_uow,
-        user_id=current_user.id,
-    )
+    file_storage = build_file_storage(current_user.id, oss)
 
     return AgentService(
         uow_factory=get_uow,

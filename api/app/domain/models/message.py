@@ -1,6 +1,6 @@
-from typing import List
+from typing import Any, List
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class MessageAttachment(BaseModel):
@@ -10,6 +10,16 @@ class MessageAttachment(BaseModel):
     filename: str = ""
     mime_type: str = ""
     url: str = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_path_string(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            return {
+                "filepath": value,
+                "filename": value.rsplit("/", 1)[-1],
+            }
+        return value
 
 
 class Message(BaseModel):

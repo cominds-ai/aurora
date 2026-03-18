@@ -117,6 +117,27 @@ function fetchWithTimeout(
   });
 }
 
+function buildHeaders(
+  headers: HeadersInit = {},
+  body?: BodyInit | null
+): HeadersInit {
+  const mergedHeaders: HeadersInit = {
+    "Content-Type": "application/json",
+    ...headers,
+  };
+
+  const accessToken = getAccessToken();
+  if (accessToken) {
+    (mergedHeaders as Record<string, string>).Authorization = `Bearer ${accessToken}`;
+  }
+
+  if (body instanceof FormData) {
+    delete (mergedHeaders as Record<string, string>)["Content-Type"];
+  }
+
+  return mergedHeaders;
+}
+
 /**
  * 核心请求函数
  */
@@ -135,21 +156,7 @@ export async function request<T = unknown>(
     ...fetchOptions
   } = options;
 
-  // 合并请求头
-  const mergedHeaders: HeadersInit = {
-    "Content-Type": "application/json",
-    ...headers,
-  };
-
-  const accessToken = getAccessToken();
-  if (accessToken) {
-    (mergedHeaders as Record<string, string>).Authorization = `Bearer ${accessToken}`;
-  }
-
-  // 如果是 FormData，删除 Content-Type 让浏览器自动设置
-  if (fetchOptions.body instanceof FormData) {
-    delete (mergedHeaders as Record<string, string>)["Content-Type"];
-  }
+  const mergedHeaders = buildHeaders(headers, fetchOptions.body);
 
   try {
     const response = await fetchWithTimeout(
@@ -195,6 +202,36 @@ export async function request<T = unknown>(
 
     throw new ApiError(500, error instanceof Error ? error.message : "未知错误");
   }
+}
+
+export async function requestBlob(
+  endpoint: string,
+  options: RequestOptions = {}
+): Promise<Blob> {
+  const url = endpoint.startsWith("http")
+    ? endpoint
+    : `${API_CONFIG.baseURL}${endpoint}`;
+
+  const {
+    timeout = API_CONFIG.timeout,
+    headers = {},
+    ...fetchOptions
+  } = options;
+
+  const response = await fetchWithTimeout(
+    url,
+    {
+      ...fetchOptions,
+      headers: buildHeaders(headers, fetchOptions.body),
+    },
+    timeout
+  );
+
+  if (!response.ok) {
+    await handleErrorResponse(response);
+  }
+
+  return response.blob();
 }
 
 /**

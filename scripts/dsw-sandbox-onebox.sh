@@ -2,7 +2,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SANDBOX_ROOT="$ROOT_DIR/sandbox"
+WORKSPACE_ROOT="$ROOT_DIR"
+SANDBOX_ROOT="$WORKSPACE_ROOT/sandbox"
 STATE_ROOT="${AURORA_SANDBOX_STATE_ROOT:-$(cd "$ROOT_DIR/.." && pwd)/aurora-sandbox-state}"
 LOG_DIR="$STATE_ROOT/logs"
 RUN_DIR="$STATE_ROOT/run"
@@ -27,6 +28,8 @@ fi
 
 export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"
 export DEBIAN_FRONTEND=noninteractive
+export UV_CACHE_DIR="$WORKSPACE_ROOT/.uv-cache"
+export UV_PYTHON_INSTALL_DIR="$WORKSPACE_ROOT/.uv-python"
 
 log() {
   printf '[aurora-sandbox-dsw] %s\n' "$*"
@@ -105,6 +108,7 @@ ensure_apt_packages() {
   $SUDO apt-get update
   $SUDO apt-get install -y \
     curl wget ca-certificates gnupg software-properties-common \
+    build-essential \
     supervisor xterm socat xvfb x11vnc websockify \
     fonts-noto-cjk fonts-noto-color-emoji language-pack-zh-hans locales \
     netcat-openbsd lsof
@@ -197,8 +201,14 @@ start_sandbox() {
 
   log "syncing sandbox dependencies..."
   (
+    cd "$WORKSPACE_ROOT"
+    uv sync --package sandbox --python 3.13.9
+  )
+
+  log "installing sandbox node runtime dependencies..."
+  (
     cd "$SANDBOX_ROOT"
-    uv sync --project "$SANDBOX_ROOT"
+    npm install
   )
 
   log "starting sandbox supervisor..."
@@ -209,7 +219,9 @@ start_sandbox() {
       ENV=production \
       LOG_LEVEL="$SANDBOX_LOG_LEVEL" \
       SERVER_TIMEOUT_MINUTES="$SANDBOX_TIMEOUT_MINUTES" \
+      WORKSPACE_ROOT="$WORKSPACE_ROOT" \
       SANDBOX_ROOT="$SANDBOX_ROOT" \
+      NODE_PATH="$SANDBOX_ROOT/node_modules" \
       LANG=zh_CN.UTF-8 \
       LANGUAGE=zh_CN:zh \
       LC_ALL=zh_CN.UTF-8 \

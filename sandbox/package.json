@@ -1,0 +1,29 @@
+{
+  "name": "@aurora/sandbox-runtime",
+  "private": true,
+  "engines": {
+    "node": "22.14.0"
+  },
+  "dependencies": {
+    "axios": "latest",
+    "cheerio": "latest",
+    "csv-parse": "latest",
+    "csv-stringify": "latest",
+    "dayjs": "latest",
+    "dotenv": "latest",
+    "exceljs": "latest",
+    "fast-glob": "latest",
+    "form-data": "latest",
+    "fs-extra": "latest",
+    "js-yaml": "latest",
+    "lodash": "latest",
+    "mammoth": "latest",
+    "papaparse": "latest",
+    "pdf-lib": "latest",
+    "pdf-parse": "latest",
+    "sharp": "latest",
+    "xlsx": "latest",
+    "xml2js": "latest",
+    "zod": "latest"
+  }
+}

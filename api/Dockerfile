@@ -4,11 +4,12 @@ FROM ubuntu:22.04
 # 2.避免交互式安装
 ENV DEBIAN_FRONTEND=noninteractive
 ENV UV_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/workspace/api
 ENV PYTHONUNBUFFERED=1
+ENV PATH=/workspace/.venv/bin:$PATH
 
 # 3.配置容器工作空间
-WORKDIR /app
+WORKDIR /workspace
 
 # 4.切换 Ubuntu 软件源到阿里云并安装 Python 3.13 与基础工具
 RUN sed -i 's|http://archive.ubuntu.com/ubuntu/|http://mirrors.aliyun.com/ubuntu/|g' /etc/apt/sources.list && \
@@ -36,18 +37,15 @@ RUN ARCH="$(dpkg --print-architecture)" && \
     tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1 && \
     rm /tmp/node.tar.xz
 
-# 6.拷贝 requirements 并安装依赖
-COPY requirements.txt .
-RUN uv pip install --system --no-cache -r requirements.txt
-
-# 7.拷贝项目文件
+# 6.拷贝项目文件并通过根级 uv workspace 安装依赖
 COPY . .
+RUN uv sync --package api --python 3.13.9 --no-dev
 
-# 8.为运行脚本配置权限
-RUN chmod +x run.sh
+# 7.为运行脚本配置权限
+RUN chmod +x api/run.sh
 
-# 9.暴露端口号
+# 8.暴露端口号
 EXPOSE 8000
 
-# 10.启动命令脚本
-CMD ["./run.sh"]
+# 9.启动命令脚本
+CMD ["./api/run.sh"]

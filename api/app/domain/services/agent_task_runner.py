@@ -1,5 +1,4 @@
 import asyncio
-import base64
 import io
 import logging
 import uuid
@@ -28,7 +27,6 @@ from app.domain.repositories.uow import IUnitOfWork
 from app.domain.services.flows.planner_react import PlannerReActFlow
 from app.domain.services.tools.a2a import A2ATool
 from app.domain.services.tools.mcp import MCPTool
-from app.infrastructure.storage.oss import get_oss
 
 logger = logging.getLogger(__name__)
 
@@ -224,11 +222,6 @@ class AgentTaskRunner(TaskRunner):
         # 1.调用浏览器完成截图
         screenshot = await self._browser.screenshot()
 
-        oss = get_oss()
-        if not oss.is_configured:
-            encoded = base64.b64encode(screenshot).decode("ascii")
-            return f"data:image/png;base64,{encoded}"
-
         # 2.将浏览器截图上传到文件存储中
         file = await self._file_storage.upload_file(UploadFile(
             file=io.BytesIO(screenshot),
@@ -237,8 +230,8 @@ class AgentTaskRunner(TaskRunner):
             size=self._get_stream_size(io.BytesIO(screenshot)),
         ))
 
-        # 3.返回对外可访问的签名URL，避免模型服务无法访问OSS内网地址
-        return oss.get_object_url(file.key)
+        # 3.返回模型可直接消费的URL
+        return await self._file_storage.get_file_url(file)
 
     async def _handle_tool_event(self, event: ToolEvent) -> None:
         """额外处理工具消息，使其前端交互更友好"""
@@ -383,7 +376,7 @@ class AgentTaskRunner(TaskRunner):
                             filepath=attachment.filepath,
                             filename=attachment.filename,
                             mime_type=attachment.mime_type,
-                            url=get_oss().get_object_url(attachment.key),
+                            url=await self._file_storage.get_file_url(attachment),
                         )
                         for attachment in event.attachments
                     ]

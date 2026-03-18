@@ -1,4 +1,4 @@
-import { get, post } from "./fetch";
+import { get, post, requestBlob } from "./fetch";
 import type { FileInfo, FileUploadParams } from "./types";
 
 /**
@@ -36,15 +36,7 @@ export const fileApi = {
    * @returns Blob 对象
    */
   downloadFile: async (fileId: string): Promise<Blob> => {
-    const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api"}/files/${fileId}/download`
-    );
-
-    if (!response.ok) {
-      throw new Error(`下载失败: ${response.statusText}`);
-    }
-
-    return response.blob();
+    return requestBlob(`/files/${fileId}/download`);
   },
 
   /**
@@ -58,4 +50,3 @@ export const fileApi = {
     return `${baseURL}/files/${fileId}/download`;
   },
 };
-

@@ -46,8 +46,8 @@ services:
 
   aurora-sandbox:
     build:
-      context: ./sandbox
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: sandbox/Dockerfile
     image: ${AURORA_SANDBOX_IMAGE:-aurora-sandbox}
     container_name: aurora-sandbox
     restart: "no"
@@ -68,8 +68,8 @@ services:
 
   aurora-api:
     build:
-      context: ./api
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: api/Dockerfile
     container_name: aurora-api
     restart: unless-stopped
     env_file:

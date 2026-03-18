@@ -200,7 +200,7 @@ NEXT_PUBLIC_API_BASE_URL=http://<api-service-host>:8000/api \
 - 初始化 PostgreSQL 数据目录
 - 启动本机 PostgreSQL 和 Redis
 - 生成根目录 `.env`（若不存在）
-- `uv sync --project api`
+- `uv sync --package api --python 3.13.9`
 - `alembic upgrade head`
 - 构建并启动 UI
 - 启动 API

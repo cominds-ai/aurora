@@ -1,0 +1,14 @@
+.git/
+.DS_Store
+.logs/
+.uv-cache/
+.uv-python/
+.venv/
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/node_modules/
+ui/.next/
+issue-image/

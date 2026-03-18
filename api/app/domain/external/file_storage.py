@@ -15,3 +15,7 @@ class FileStorage(Protocol):
     async def download_file(self, file_id: str) -> Tuple[BinaryIO, File]:
         """根据传递的文件id下载文件，并返回文件源+文件信息"""
         ...
+
+    async def get_file_url(self, file: File) -> str:
+        """返回模型或前端可消费的文件URL；无法直接暴露时返回空字符串"""
+        ...

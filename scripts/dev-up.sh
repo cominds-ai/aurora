@@ -11,12 +11,17 @@ FOLLOW_LOGS=1
 CLEANUP_ON_EXIT=1
 COMPOSE_PROJECT="aurora-local"
 COMPOSE_ENV_FILE=".env.example"
+COMPOSE_FILES=("$ROOT_DIR/docker-compose.yml" "$ROOT_DIR/docker-compose.dev.yml")
 SCRIPT_TTY=""
 HOST_DOCKER_PLATFORM=""
+EXPECTED_NODE_VERSION="$(tr -d '\r\n' <"$ROOT_DIR/.nvmrc")"
+EXPECTED_PYTHON_VERSION="$(tr -d '\r\n' <"$ROOT_DIR/.python-version")"
 export AURORA_SANDBOX_IMAGE="aurora-sandbox-local"
 export AURORA_REDIS_VOLUME="aurora_local_redis_data"
 export AURORA_POSTGRES_VOLUME="aurora_local_postgres_data"
 export AURORA_NETWORK_NAME="aurora-local-network"
+export UV_CACHE_DIR="$ROOT_DIR/.uv-cache"
+export UV_PYTHON_INSTALL_DIR="$ROOT_DIR/.uv-python"
 
 mkdir -p "$LOG_DIR"
 
@@ -74,6 +79,20 @@ run_docker() {
   "$@"
 }
 
+run_compose() {
+  local compose_args=(
+    -p "$COMPOSE_PROJECT"
+    --env-file "$COMPOSE_ENV_FILE"
+  )
+  local compose_file
+
+  for compose_file in "${COMPOSE_FILES[@]}"; do
+    compose_args+=(-f "$compose_file")
+  done
+
+  run_docker docker compose "${compose_args[@]}" "$@"
+}
+
 cleanup_followers() {
   for pid in "${FOLLOW_PIDS[@]:-}"; do
     if kill -0 "$pid" 2>/dev/null; then
@@ -122,7 +141,7 @@ shutdown_all() {
 
   (
     cd "$ROOT_DIR"
-    run_docker docker compose -p "$COMPOSE_PROJECT" --env-file "$COMPOSE_ENV_FILE" down >/dev/null 2>&1 || true
+    run_compose down >/dev/null 2>&1 || true
   )
 
   echo "[aurora] all local services stopped"
@@ -220,7 +239,7 @@ ensure_sandbox_image() {
 
   if ! run_docker docker image inspect "$AURORA_SANDBOX_IMAGE" >/dev/null 2>&1 || [ "$current_hash" != "$previous_hash" ] || [ "$current_meta" != "$previous_meta" ]; then
     echo "[aurora] rebuilding sandbox image..."
-    run_docker docker compose -p "$COMPOSE_PROJECT" --env-file "$COMPOSE_ENV_FILE" build aurora-sandbox
+    run_compose build aurora-sandbox
     printf '%s' "$current_hash" >"$SANDBOX_HASH_FILE"
     printf '%s' "$current_meta" >"$SANDBOX_META_FILE"
   fi
@@ -231,12 +250,11 @@ start_api() {
   echo "[aurora] starting api on http://localhost:8000 ..."
   ensure_port_free 8000 "api"
   (
-    cd "$ROOT_DIR/api"
+    cd "$ROOT_DIR"
     nohup env \
       ENV=development \
-      UV_CACHE_DIR="/tmp/aurora-uv-cache" \
-      uv run --project "$ROOT_DIR/api" \
-      uvicorn app.main:app --app-dir "$ROOT_DIR/api" --host 0.0.0.0 --port 8000 --timeout-graceful-shutdown 0 \
+      uv run --package api --python "$EXPECTED_PYTHON_VERSION" \
+      uvicorn app.main:app --app-dir "$ROOT_DIR/api" --host 0.0.0.0 --port 8000 --reload --reload-dir "$ROOT_DIR/api" --timeout-graceful-shutdown 0 \
       </dev/null >"$LOG_DIR/api.log" 2>&1 &
     echo $! >"$LOG_DIR/api.pid"
   )
@@ -246,10 +264,10 @@ start_ui() {
   : >"$LOG_DIR/ui.log"
   echo "[aurora] starting ui on http://localhost:3000 ..."
   (
-    cd "$ROOT_DIR/ui"
+    cd "$ROOT_DIR"
     nohup env \
       NEXT_PUBLIC_API_BASE_URL="http://localhost:8000/api" \
-      npm run dev -- --hostname 0.0.0.0 --port 3000 \
+      npm run dev --workspace @aurora/ui -- --hostname 0.0.0.0 --port 3000 \
       </dev/null >"$LOG_DIR/ui.log" 2>&1 &
     echo $! >"$LOG_DIR/ui.pid"
   )
@@ -269,7 +287,7 @@ follow_file() {
 
 follow_infra_logs() {
   (
-    run_docker docker compose -p "$COMPOSE_PROJECT" --env-file "$COMPOSE_ENV_FILE" logs -f --tail=20 aurora-postgres aurora-redis aurora-sandbox 2>/dev/null | while IFS= read -r line; do
+    run_compose logs -f --tail=20 aurora-postgres aurora-redis aurora-sandbox 2>/dev/null | while IFS= read -r line; do
       printf '[infra] %s\n' "$line" >&3
     done
   ) &
@@ -288,14 +306,22 @@ if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
   exit 1
 fi
 
+CURRENT_NODE_VERSION="$(node -v 2>/dev/null | sed 's/^v//')"
+if [ "$CURRENT_NODE_VERSION" != "$EXPECTED_NODE_VERSION" ]; then
+  echo "[aurora] node version mismatch: expected $EXPECTED_NODE_VERSION, got ${CURRENT_NODE_VERSION:-unknown}"
+  echo "[aurora] please switch node with: nvm use"
+  exit 1
+fi
+
 if ! command -v docker >/dev/null 2>&1; then
   echo "[aurora] docker is required"
   exit 1
 fi
 
-echo "[aurora] expected python version: 3.13.9"
-echo "[aurora] expected node version: 22.14.0"
+echo "[aurora] expected python version: $EXPECTED_PYTHON_VERSION"
+echo "[aurora] expected node version: $EXPECTED_NODE_VERSION"
 echo "[aurora] local env file: .env.example"
+echo "[aurora] compose files: docker-compose.yml + docker-compose.dev.yml"
 if [ -n "$HOST_DOCKER_PLATFORM" ]; then
   echo "[aurora] docker platform: $HOST_DOCKER_PLATFORM"
 fi
@@ -309,21 +335,21 @@ ensure_port_free 3000 "ui"
 
 ensure_sandbox_image
 
-run_docker docker compose -p "$COMPOSE_PROJECT" --env-file "$COMPOSE_ENV_FILE" up -d aurora-postgres aurora-redis aurora-sandbox
+run_compose up -d aurora-postgres aurora-redis aurora-sandbox
 
 wait_for_port 127.0.0.1 5432 "postgres"
 wait_for_port 127.0.0.1 6379 "redis"
 if ! wait_for_http "http://127.0.0.1:8080/api/supervisor/status" "sandbox" 60; then
-  echo "[aurora] sandbox failed to start, check: docker compose -p $COMPOSE_PROJECT --env-file $COMPOSE_ENV_FILE logs aurora-sandbox"
+  echo "[aurora] sandbox failed to start, check: docker compose -p $COMPOSE_PROJECT --env-file $COMPOSE_ENV_FILE -f docker-compose.yml -f docker-compose.dev.yml logs aurora-sandbox"
   exit 1
 fi
 
-echo "[aurora] syncing api dependencies with uv..."
-UV_CACHE_DIR="/tmp/aurora-uv-cache" uv sync --project "$ROOT_DIR/api"
+echo "[aurora] syncing python workspace with uv..."
+uv sync --all-packages --python "$EXPECTED_PYTHON_VERSION"
 
-if [ ! -d "$ROOT_DIR/ui/node_modules" ]; then
-  echo "[aurora] installing ui dependencies..."
-  (cd "$ROOT_DIR/ui" && npm install)
+if [ ! -x "$ROOT_DIR/node_modules/.bin/next" ] && [ ! -x "$ROOT_DIR/ui/node_modules/.bin/next" ]; then
+  echo "[aurora] installing workspace dependencies..."
+  (cd "$ROOT_DIR" && npm install --workspace @aurora/ui)
 fi
 
 if [ -f "$LOG_DIR/api.pid" ] && kill -0 "$(cat "$LOG_DIR/api.pid")" 2>/dev/null; then

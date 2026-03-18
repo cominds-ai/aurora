@@ -34,6 +34,7 @@ wheels/
 
 # uv / virtualenv
 .uv-cache/
+.uv-python/
 .venv/
 api/.uv-cache/
 api/.venv/
@@ -51,6 +52,7 @@ ui/coverage/
 # Local generated assets
 .pycache/
 issue-image/
+api/tmp/uploads/
 
 # Keep checked-in version markers
 !.python-version

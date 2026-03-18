@@ -1,0 +1,7 @@
+services:
+  aurora-sandbox:
+    environment:
+      UVI_ARGS: --reload
+    volumes:
+      - ./sandbox/app:/sandbox/app
+      - ./sandbox/supervisord.conf:/sandbox/supervisord.conf:ro
