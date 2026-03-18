@@ -83,7 +83,7 @@ export type SearchConfig = {
 };
 
 export type SandboxPreference = {
-  preferred_sandbox_id?: string | null;
+  preferred_sandbox_host?: string | null;
 };
 
 export type SandboxOption = {

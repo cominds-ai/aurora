@@ -3,6 +3,7 @@ from typing import List, Callable
 
 from app.application.errors.exceptions import NotFoundError, ServerRequestsError
 from app.domain.models.file import File
+from app.domain.models.app_config import SandboxPreference
 from app.domain.models.session import Session
 from app.domain.models.user import User
 from app.domain.repositories.uow import IUnitOfWork
@@ -26,6 +27,11 @@ class SessionService:
         self._uow = uow_factory()
         self._sandbox_service = sandbox_service
         self._current_user = current_user
+
+    async def _get_sandbox_preference(self) -> SandboxPreference:
+        async with self._uow_factory() as uow:
+            app_config = await uow.user_config.load(self._current_user.id)
+        return app_config.sandbox_preference
 
     async def create_session(self) -> Session:
         """创建一个空白的新任务会话"""
@@ -91,7 +97,12 @@ class SessionService:
         # 2.根据沙箱id获取沙箱并判断是否存在
         if not session.sandbox_id:
             raise NotFoundError("当前会话无沙箱环境")
-        sandbox = await self._sandbox_service.get_session_sandbox(self._current_user.id, session.sandbox_id, None)
+        sandbox_preference = await self._get_sandbox_preference()
+        sandbox = await self._sandbox_service.get_session_sandbox(
+            self._current_user.id,
+            session.sandbox_id,
+            sandbox_preference,
+        )
         if not sandbox:
             raise NotFoundError("当前会话沙箱不存在或已销毁")
 
@@ -114,7 +125,12 @@ class SessionService:
         # 2.根据沙箱id获取沙箱并判断是否存在
         if not session.sandbox_id:
             raise NotFoundError("当前会话无沙箱环境")
-        sandbox = await self._sandbox_service.get_session_sandbox(self._current_user.id, session.sandbox_id, None)
+        sandbox_preference = await self._get_sandbox_preference()
+        sandbox = await self._sandbox_service.get_session_sandbox(
+            self._current_user.id,
+            session.sandbox_id,
+            sandbox_preference,
+        )
         if not sandbox:
             raise NotFoundError("当前会话沙箱不存在或已销毁")
 
@@ -137,7 +153,12 @@ class SessionService:
         # 2.根据沙箱id获取沙箱并判断是否存在
         if not session.sandbox_id:
             raise NotFoundError("当前会话无沙箱环境")
-        sandbox = await self._sandbox_service.get_session_sandbox(self._current_user.id, session.sandbox_id, None)
+        sandbox_preference = await self._get_sandbox_preference()
+        sandbox = await self._sandbox_service.get_session_sandbox(
+            self._current_user.id,
+            session.sandbox_id,
+            sandbox_preference,
+        )
         if not sandbox:
             raise NotFoundError("当前会话沙箱不存在或已销毁")
 

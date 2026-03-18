@@ -86,11 +86,13 @@ http://localhost:3000
 - `model_name`: `gpt-5.4`
 - `api_key`: 你自己的模型密钥
 - `SerpAPI Key`: 你自己的 Google 搜索密钥
+- `DSW 沙箱地址`: 本地联调时填写 `127.0.0.1`
 
 说明：
 
 - 不填 `api_key` 时，页面可以打开，但模型调用会失败
 - 不填 `SerpAPI Key` 时，Google 搜索功能不可用
+- 不填 `DSW 沙箱地址` 时，系统会提示“沙箱没有配置，沙箱不可用”，并且不会自动连接本地 sandbox
 
 ## 4. 推荐调试顺序
 

@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, WebSocket
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -38,6 +38,21 @@ async def get_current_user(
     if not credentials:
         raise HTTPException(status_code=401, detail="未登录")
     return await auth_service.get_user_by_token(credentials.credentials)
+
+
+async def get_websocket_current_user(
+        websocket: WebSocket,
+        auth_service: AuthService = Depends(get_auth_service),
+) -> User:
+    token = websocket.query_params.get("access_token")
+    if not token:
+        auth_header = websocket.headers.get("authorization", "")
+        if auth_header.lower().startswith("bearer "):
+            token = auth_header[7:].strip()
+
+    if not token:
+        raise HTTPException(status_code=401, detail="未登录")
+    return await auth_service.get_user_by_token(token)
 
 
 def get_app_config_service(current_user: User = Depends(get_current_user)) -> AppConfigService:
@@ -81,6 +96,13 @@ def get_file_service(
 
 def get_session_service(
         current_user: User = Depends(get_current_user),
+        sandbox_service: SandboxService = Depends(get_sandbox_service),
+) -> SessionService:
+    return SessionService(uow_factory=get_uow, sandbox_service=sandbox_service, current_user=current_user)
+
+
+def get_websocket_session_service(
+        current_user: User = Depends(get_websocket_current_user),
         sandbox_service: SandboxService = Depends(get_sandbox_service),
 ) -> SessionService:
     return SessionService(uow_factory=get_uow, sandbox_service=sandbox_service, current_user=current_user)

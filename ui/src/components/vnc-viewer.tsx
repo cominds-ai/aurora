@@ -20,6 +20,7 @@ export function VNCViewer({ url, viewOnly, onStatusChange }: VNCViewerProps) {
     onStatusChange?.('connecting')
 
     let rfb: RFB | null = null
+    let disconnected = false
     try {
       rfb = new RFB(displayRef.current, url, {
         credentials: { password: '', username: '', target: '' },
@@ -31,6 +32,7 @@ export function VNCViewer({ url, viewOnly, onStatusChange }: VNCViewerProps) {
 
       rfb.addEventListener('connect', () => onStatusChange?.('connected'))
       rfb.addEventListener('disconnect', (e: CustomEvent) => {
+        disconnected = true
         if (e.detail?.clean) {
           onStatusChange?.('disconnected', '连接已断开')
         } else {
@@ -45,7 +47,8 @@ export function VNCViewer({ url, viewOnly, onStatusChange }: VNCViewerProps) {
     }
 
     return () => {
-      try { rfb?.disconnect() } catch { /* noop */ }
+      if (!rfb || disconnected) return
+      try { rfb.disconnect() } catch { /* noop */ }
     }
   }, [url, viewOnly, onStatusChange])
 

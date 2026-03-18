@@ -26,7 +26,6 @@ import type {
   AgentConfig,
   LLMConfig,
   SearchConfig,
-  SandboxOption,
   SandboxPreference,
   ListMCPServerItem,
   ListA2AServerItem,
@@ -245,11 +244,10 @@ function SearchSetting({config, onChange}: SearchSettingProps) {
 
 type SandboxSettingProps = {
   config: SandboxPreference
-  sandboxes: SandboxOption[]
   onChange: (config: SandboxPreference) => void
 }
 
-function SandboxSetting({config, sandboxes, onChange}: SandboxSettingProps) {
+function SandboxSetting({config, onChange}: SandboxSettingProps) {
   return (
     <form className="w-full px-1" onSubmit={(e) => e.preventDefault()}>
       <FieldGroup>
@@ -257,22 +255,17 @@ function SandboxSetting({config, sandboxes, onChange}: SandboxSettingProps) {
           <FieldLegend className="text-lg font-bold text-gray-700">专属沙箱</FieldLegend>
           <FieldGroup>
             <Field>
-              <FieldLabel htmlFor="preferred_sandbox_id">优先沙箱</FieldLabel>
-              <select
-                id="preferred_sandbox_id"
-                className="h-10 rounded-md border border-input bg-transparent px-3 text-sm outline-none"
-                value={config.preferred_sandbox_id ?? ''}
-                onChange={(e) => onChange({preferred_sandbox_id: e.target.value || null})}
-              >
-                <option value="">自动分配</option>
-                {sandboxes.map((sandbox) => (
-                  <option key={sandbox.sandbox_id} value={sandbox.sandbox_id}>
-                    {sandbox.label}
-                  </option>
-                ))}
-              </select>
+              <FieldLabel htmlFor="preferred_sandbox_host">DSW 沙箱地址</FieldLabel>
+              <Input
+                id="preferred_sandbox_host"
+                type="text"
+                placeholder="10.x.x.x 或 dsw-sandbox.internal"
+                value={config.preferred_sandbox_host ?? ''}
+                onChange={(e) => onChange({...config, preferred_sandbox_host: e.target.value || null})}
+              />
               <FieldDescription className="text-xs">
-                长时间 3 天不使用后，沙箱绑定会自动释放。
+                Aurora 会固定使用 `8080`、`9222`、`5901` 端口。
+                未配置该地址时，系统会提示“沙箱没有配置，沙箱不可用”，且不会再自动连接任何默认沙箱。
               </FieldDescription>
             </Field>
           </FieldGroup>
@@ -650,7 +643,6 @@ export function AuroraSettings() {
   const [llmConfig, setLlmConfig] = useState<LLMConfig>({})
   const [searchConfig, setSearchConfig] = useState<SearchConfig>({})
   const [sandboxPreference, setSandboxPreference] = useState<SandboxPreference>({})
-  const [sandboxes, setSandboxes] = useState<SandboxOption[]>([])
   const [mcpServers, setMcpServers] = useState<ListMCPServerItem[]>([])
   const [a2aServers, setA2aServers] = useState<ListA2AServerItem[]>([])
 
@@ -675,14 +667,12 @@ export function AuroraSettings() {
       configApi.getLLMConfig(),
       configApi.getSearchConfig(),
       configApi.getSandboxPreference(),
-      configApi.getSandboxes(),
     ])
-      .then(([agent, llm, search, sandboxPref, sandboxData]) => {
+      .then(([agent, llm, search, sandboxPref]) => {
         setAgentConfig(agent)
         setLlmConfig(llm)
         setSearchConfig(search)
         setSandboxPreference(sandboxPref)
-        setSandboxes(sandboxData?.sandboxes ?? [])
       })
       .catch((err) => {
         console.error('[Settings] 获取基础配置失败:', err)
@@ -745,7 +735,7 @@ export function AuroraSettings() {
         toast.success('Google 搜索配置保存成功')
       } else if (activeSetting === 'sandbox-setting') {
         await configApi.updateSandboxPreference(sandboxPreference)
-        toast.success('专属沙箱偏好保存成功')
+        toast.success('专属沙箱配置保存成功')
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : '保存失败'
@@ -926,7 +916,6 @@ export function AuroraSettings() {
                 {activeSetting === 'sandbox-setting' && (
                   <SandboxSetting
                     config={sandboxPreference}
-                    sandboxes={sandboxes}
                     onChange={setSandboxPreference}
                   />
                 )}

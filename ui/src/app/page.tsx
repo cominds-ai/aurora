@@ -4,6 +4,7 @@ import {FormEvent, useEffect, useRef, useState} from 'react'
 import {useRouter} from 'next/navigation'
 import {ChatHeader} from '@/components/chat-header'
 import {ChatInput, type ChatInputRef} from '@/components/chat-input'
+import {SandboxConnectionPrompt} from '@/components/sandbox-connection-prompt'
 import {SuggestedQuestions} from '@/components/suggested-questions'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
@@ -165,6 +166,7 @@ export default function Page() {
             <div className="text-gray-700">您好, 地球人</div>
             <div className="text-gray-500">我能为您做什么?</div>
           </div>
+          <SandboxConnectionPrompt />
           {/* 对话框 */}
           <ChatInput
             ref={chatInputRef}

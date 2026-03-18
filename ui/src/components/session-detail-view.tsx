@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { SessionHeader } from '@/components/session-header'
 import { ChatInput } from '@/components/chat-input'
 import { PlanPanel } from '@/components/plan-panel'
+import { SandboxConnectionPrompt } from '@/components/sandbox-connection-prompt'
 import { ChatMessage } from '@/components/chat-message'
 import { FilePreviewPanel } from '@/components/file-preview-panel'
 import { ToolPreviewPanel } from '@/components/tool-preview-panel'
@@ -296,6 +297,7 @@ export function SessionDetailView({ sessionId, initialMessage, initialAttachment
             </div>
 
             <div className="flex-shrink-0 bg-[#f8f8f7] py-4">
+              <SandboxConnectionPrompt />
               <PlanPanel className="mb-2" steps={planSteps} />
               <ChatInput
                 onSend={handleSend}

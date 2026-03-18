@@ -2,7 +2,7 @@ import uuid
 from enum import Enum
 from typing import Dict, Optional, List, Any
 
-from pydantic import AnyHttpUrl, BaseModel, Field, ConfigDict, model_validator
+from pydantic import AnyHttpUrl, BaseModel, Field, ConfigDict, model_validator, field_validator
 
 
 class LLMConfig(BaseModel):
@@ -38,7 +38,15 @@ class SearchConfig(BaseModel):
 
 class SandboxPreference(BaseModel):
     """用户沙箱偏好配置"""
-    preferred_sandbox_id: Optional[str] = None
+    preferred_sandbox_host: Optional[str] = None
+
+    @field_validator("preferred_sandbox_host", mode="before")
+    @classmethod
+    def normalize_optional_string(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
 
 
 class MCPTransport(str, Enum):

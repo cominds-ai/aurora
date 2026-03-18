@@ -21,7 +21,7 @@ from app.interfaces.schemas.session import (
     ChatRequest,
     GetSessionResponse, GetSessionFilesResponse, FileReadResponse, FileReadRequest, ShellReadResponse, ShellReadRequest,
 )
-from app.interfaces.service_dependencies import get_session_service, get_agent_service
+from app.interfaces.service_dependencies import get_session_service, get_agent_service, get_websocket_session_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/sessions", tags=["会话模块"])
@@ -281,7 +281,7 @@ async def read_shell_output(
 async def vnc_websocket(
         websocket: WebSocket,
         session_id: str,
-        session_service: SessionService = Depends(get_session_service),
+        session_service: SessionService = Depends(get_websocket_session_service),
 ) -> None:
     """VNC Websocket端点，用于建立与沙箱环境的vnc连接，并双向转发数据"""
     # 1.从客户端noVNC接收子协议

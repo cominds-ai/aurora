@@ -5,6 +5,7 @@ from typing import AsyncGenerator, Optional, List, Type, Callable
 
 from pydantic import TypeAdapter
 
+from app.application.errors.exceptions import AppException
 from app.domain.external.file_storage import FileStorage
 from app.domain.external.json_parser import JSONParser
 from app.domain.external.task import Task
@@ -60,7 +61,7 @@ class AgentService:
         sandbox = await self._sandbox_service.get_session_sandbox(
             user_id=self._current_user.id,
             sandbox_id=session.sandbox_id,
-            preferred_sandbox_id=app_config.sandbox_preference.preferred_sandbox_id,
+            sandbox_preference=app_config.sandbox_preference,
         )
         session.sandbox_id = sandbox.id
         async with self._uow:
@@ -212,9 +213,11 @@ class AgentService:
         except Exception as e:
             # 17.记录日志并返回错误事件
             logger.error(f"任务会话[{session_id}]对话出错: {str(e)}")
-            event = ErrorEvent(error=str(e))
+            error_message = e.msg if isinstance(e, AppException) else str(e)
+            event = ErrorEvent(error=error_message or "服务器出现异常请稍后重试")
             try:
                 async with self._uow:
+                    await self._uow.session.update_status(session_id, SessionStatus.COMPLETED)
                     await self._uow.session.add_event(session_id, event)
             except (asyncio.CancelledError, Exception) as add_err:
                 logger.warning(f"会话[{session_id}]添加错误事件失败(可能是客户端断开连接): {add_err}")

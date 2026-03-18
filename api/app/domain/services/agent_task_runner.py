@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import io
 import logging
 import uuid
@@ -223,6 +224,11 @@ class AgentTaskRunner(TaskRunner):
         # 1.调用浏览器完成截图
         screenshot = await self._browser.screenshot()
 
+        oss = get_oss()
+        if not oss.is_configured:
+            encoded = base64.b64encode(screenshot).decode("ascii")
+            return f"data:image/png;base64,{encoded}"
+
         # 2.将浏览器截图上传到文件存储中
         file = await self._file_storage.upload_file(UploadFile(
             file=io.BytesIO(screenshot),
@@ -232,7 +238,7 @@ class AgentTaskRunner(TaskRunner):
         ))
 
         # 3.返回对外可访问的签名URL，避免模型服务无法访问OSS内网地址
-        return get_oss().get_object_url(file.key)
+        return oss.get_object_url(file.key)
 
     async def _handle_tool_event(self, event: ToolEvent) -> None:
         """额外处理工具消息，使其前端交互更友好"""
