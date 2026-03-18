@@ -1,11 +1,11 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import {useCallback, useEffect, useState} from 'react'
 import { AlertTriangle, Loader2 } from 'lucide-react'
-import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { configApi } from '@/lib/api'
+import {toast} from 'sonner'
+import {Button} from '@/components/ui/button'
+import {Input} from '@/components/ui/input'
+import {configApi} from '@/lib/api'
 
 const SANDBOX_PROMPT_MESSAGE = '您还未连接沙箱地址，请联系风后（田萧波）提供'
 
@@ -19,12 +19,15 @@ export function SandboxConnectionPrompt() {
     let mounted = true
 
     configApi
-      .getSandboxPreference()
-      .then((preference) => {
+      .getSandboxPreferenceStatus()
+      .then((status) => {
         if (!mounted) return
-        const host = preference.preferred_sandbox_host?.trim() ?? ''
+        const host = status.preferred_sandbox_host?.trim() ?? ''
         setSandboxHost(host)
-        setConnected(Boolean(host))
+        setConnected(status.connected)
+        if (status.needs_reconfigure && status.message) {
+          toast.error(status.message)
+        }
       })
       .catch((error) => {
         if (!mounted) return

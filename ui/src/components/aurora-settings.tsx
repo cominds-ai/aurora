@@ -666,13 +666,15 @@ export function AuroraSettings() {
       configApi.getAgentConfig(),
       configApi.getLLMConfig(),
       configApi.getSearchConfig(),
-      configApi.getSandboxPreference(),
+      configApi.getSandboxPreferenceStatus(),
     ])
-      .then(([agent, llm, search, sandboxPref]) => {
+      .then(([agent, llm, search, sandboxStatus]) => {
         setAgentConfig(agent)
         setLlmConfig(llm)
         setSearchConfig(search)
-        setSandboxPreference(sandboxPref)
+        setSandboxPreference({
+          preferred_sandbox_host: sandboxStatus.preferred_sandbox_host ?? null,
+        })
       })
       .catch((err) => {
         console.error('[Settings] 获取基础配置失败:', err)
@@ -734,7 +736,8 @@ export function AuroraSettings() {
         await configApi.updateSearchConfig(searchConfig)
         toast.success('Google 搜索配置保存成功')
       } else if (activeSetting === 'sandbox-setting') {
-        await configApi.updateSandboxPreference(sandboxPreference)
+        const updated = await configApi.updateSandboxPreference(sandboxPreference)
+        setSandboxPreference(updated)
         toast.success('专属沙箱配置保存成功')
       }
     } catch (err) {

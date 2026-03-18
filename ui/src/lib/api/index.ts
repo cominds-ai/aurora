@@ -30,6 +30,7 @@ export type {
   AgentConfig,
   SearchConfig,
   SandboxPreference,
+  SandboxPreferenceStatus,
   SandboxOption,
   SandboxOptionsData,
   ListMCPServerItem,

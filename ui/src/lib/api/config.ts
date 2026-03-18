@@ -4,6 +4,7 @@ import type {
   AgentConfig,
   SearchConfig,
   SandboxPreference,
+  SandboxPreferenceStatus,
   SandboxOptionsData,
   MCPConfig,
   MCPServersData,
@@ -53,6 +54,10 @@ export const configApi = {
 
   getSandboxPreference: (): Promise<SandboxPreference> => {
     return get<SandboxPreference>("/app-config/sandbox-preference");
+  },
+
+  getSandboxPreferenceStatus: (): Promise<SandboxPreferenceStatus> => {
+    return get<SandboxPreferenceStatus>("/app-config/sandbox-preference/status");
   },
 
   updateSandboxPreference: (

@@ -61,6 +61,10 @@ class FakeSettings:
     sandbox_registry_json: str = "[]"
 
 
+async def _noop_alive_check(self, item) -> None:
+    return None
+
+
 def test_assign_for_user_uses_preferred_sandbox_host(monkeypatch):
     repo = FakeSandboxBindingRepository()
     settings = FakeSettings()
@@ -69,6 +73,7 @@ def test_assign_for_user_uses_preferred_sandbox_host(monkeypatch):
         "app.application.services.sandbox_service.get_settings",
         lambda: settings,
     )
+    monkeypatch.setattr(SandboxService, "_ensure_manual_sandbox_alive", _noop_alive_check)
 
     service = SandboxService(uow_factory=lambda: FakeUnitOfWork(repo))
 
@@ -96,6 +101,7 @@ def test_assign_for_user_switches_binding_when_preferred_sandbox_host_changes(mo
         "app.application.services.sandbox_service.get_settings",
         lambda: settings,
     )
+    monkeypatch.setattr(SandboxService, "_ensure_manual_sandbox_alive", _noop_alive_check)
 
     service = SandboxService(uow_factory=lambda: FakeUnitOfWork(repo))
 
@@ -139,3 +145,71 @@ def test_assign_for_user_raises_when_sandbox_host_not_configured(monkeypatch):
         )
 
     assert "沙箱没有配置" in exc_info.value.msg
+
+
+def test_assign_for_user_rejects_occupied_sandbox(monkeypatch):
+    repo = FakeSandboxBindingRepository()
+    settings = FakeSettings()
+
+    monkeypatch.setattr(
+        "app.application.services.sandbox_service.get_settings",
+        lambda: settings,
+    )
+    monkeypatch.setattr(SandboxService, "_ensure_manual_sandbox_alive", _noop_alive_check)
+
+    service = SandboxService(uow_factory=lambda: FakeUnitOfWork(repo))
+
+    asyncio.run(
+        service.assign_for_user(
+            "user-1",
+            SandboxPreference(preferred_sandbox_host="10.1.2.3"),
+        )
+    )
+
+    with pytest.raises(BadRequestError) as exc_info:
+        asyncio.run(
+            service.assign_for_user(
+                "user-2",
+                SandboxPreference(preferred_sandbox_host="10.1.2.3"),
+            )
+        )
+
+    assert "已被其他用户占用" in exc_info.value.msg
+
+
+def test_inspect_preference_marks_invalid_and_releases_binding(monkeypatch):
+    repo = FakeSandboxBindingRepository()
+    settings = FakeSettings()
+
+    monkeypatch.setattr(
+        "app.application.services.sandbox_service.get_settings",
+        lambda: settings,
+    )
+    monkeypatch.setattr(SandboxService, "_ensure_manual_sandbox_alive", _noop_alive_check)
+
+    service = SandboxService(uow_factory=lambda: FakeUnitOfWork(repo))
+
+    asyncio.run(
+        service.assign_for_user(
+            "user-1",
+            SandboxPreference(preferred_sandbox_host="10.1.2.3"),
+        )
+    )
+
+    async def _raise_alive_check(self, item) -> None:
+        raise BadRequestError("当前 DSW 沙箱不可达，请确认 IP/域名有效且沙箱已启动")
+
+    monkeypatch.setattr(SandboxService, "_ensure_manual_sandbox_alive", _raise_alive_check)
+
+    status = asyncio.run(
+        service.inspect_preference(
+            "user-1",
+            SandboxPreference(preferred_sandbox_host="10.1.2.3"),
+        )
+    )
+
+    binding = asyncio.run(repo.get_by_user_id("user-1"))
+    assert status.connected is False
+    assert status.needs_reconfigure is True
+    assert "不可达" in status.message
+    assert binding is None

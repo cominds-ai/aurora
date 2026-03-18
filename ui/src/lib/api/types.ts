@@ -86,6 +86,14 @@ export type SandboxPreference = {
   preferred_sandbox_host?: string | null;
 };
 
+export type SandboxPreferenceStatus = {
+  preferred_sandbox_host?: string | null;
+  configured: boolean;
+  connected: boolean;
+  needs_reconfigure: boolean;
+  message: string;
+};
+
 export type SandboxOption = {
   sandbox_id: string;
   label: string;

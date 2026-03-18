@@ -6,10 +6,11 @@ from fastapi import APIRouter, Depends, Body
 from app.application.services.app_config_service import AppConfigService
 from app.application.services.sandbox_service import SandboxService
 from app.domain.models.app_config import LLMConfig, AgentConfig, MCPConfig, SearchConfig, SandboxPreference
+from app.domain.models.user import User
 from app.interfaces.schemas.app_config import ListMCPServerResponse, ListA2AServerResponse, ListSandboxOptionResponse, \
-    SandboxOptionItem
+    SandboxOptionItem, SandboxPreferenceStatusResponse
 from app.interfaces.schemas.base import Response
-from app.interfaces.service_dependencies import get_app_config_service, get_sandbox_service
+from app.interfaces.service_dependencies import get_app_config_service, get_sandbox_service, get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/app-config", tags=["设置模块"])
@@ -116,6 +117,34 @@ async def get_sandbox_preference(
     return Response.success(data=sandbox_preference.model_dump())
 
 
+@router.get(
+    path="/sandbox-preference/status",
+    response_model=Response[SandboxPreferenceStatusResponse],
+    summary="获取沙箱偏好配置状态",
+)
+async def get_sandbox_preference_status(
+        current_user: User = Depends(get_current_user),
+        app_config_service: AppConfigService = Depends(get_app_config_service),
+        sandbox_service: SandboxService = Depends(get_sandbox_service),
+) -> Response[SandboxPreferenceStatusResponse]:
+    sandbox_preference = await app_config_service.get_sandbox_preference()
+    status = await sandbox_service.inspect_preference(current_user.id, sandbox_preference)
+    if status.needs_reconfigure and sandbox_preference.preferred_sandbox_host:
+        await app_config_service.update_sandbox_preference(SandboxPreference())
+        status.preferred_sandbox_host = None
+        status.configured = False
+
+    return Response.success(
+        data=SandboxPreferenceStatusResponse(
+            preferred_sandbox_host=status.preferred_sandbox_host,
+            configured=status.configured,
+            connected=status.connected,
+            needs_reconfigure=status.needs_reconfigure,
+            message=status.message,
+        )
+    )
+
+
 @router.post(
     path="/sandbox-preference",
     response_model=Response[SandboxPreference],
@@ -123,9 +152,19 @@ async def get_sandbox_preference(
 )
 async def update_sandbox_preference(
         sandbox_preference: SandboxPreference,
+        current_user: User = Depends(get_current_user),
         app_config_service: AppConfigService = Depends(get_app_config_service),
+        sandbox_service: SandboxService = Depends(get_sandbox_service),
 ) -> Response[SandboxPreference]:
-    updated = await app_config_service.update_sandbox_preference(sandbox_preference)
+    normalized_preference = SandboxPreference(
+        preferred_sandbox_host=sandbox_preference.preferred_sandbox_host
+    )
+    if normalized_preference.preferred_sandbox_host:
+        await sandbox_service.assign_for_user(current_user.id, normalized_preference)
+    else:
+        await sandbox_service.clear_binding_for_user(current_user.id)
+
+    updated = await app_config_service.update_sandbox_preference(normalized_preference)
     return Response.success(data=updated.model_dump(), msg="更新沙箱偏好成功")
 
 

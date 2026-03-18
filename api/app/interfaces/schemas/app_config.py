@@ -43,3 +43,11 @@ class SandboxOptionItem(BaseModel):
 
 class ListSandboxOptionResponse(BaseModel):
     sandboxes: List[SandboxOptionItem] = Field(default_factory=list)
+
+
+class SandboxPreferenceStatusResponse(BaseModel):
+    preferred_sandbox_host: Optional[str] = None
+    configured: bool = False
+    connected: bool = False
+    needs_reconfigure: bool = False
+    message: str = ""
