@@ -1,8 +1,10 @@
 'use client'
 
+import type {ComponentProps} from 'react'
 import {useCallback, useEffect, useRef, useState} from 'react'
+import {useRouter} from 'next/navigation'
 import {toast} from 'sonner'
-import {LayoutGrid, LayoutList, Loader2, Settings, Sparkles, Trash, Wrench} from 'lucide-react'
+import {LayoutGrid, LayoutList, Loader2, LogOut, Settings, Sparkles, Trash, Wrench} from 'lucide-react'
 import {
   Dialog,
   DialogClose,
@@ -30,6 +32,10 @@ import type {
   ListMCPServerItem,
   ListA2AServerItem,
 } from '@/lib/api'
+import {clearAuthSession} from '@/lib/auth'
+import {cn} from '@/lib/utils'
+
+const CONFIGURED_SECRET_MASK = '••••••••••'
 
 // ==================== 通用配置 ====================
 
@@ -110,6 +116,15 @@ type LLMSettingProps = {
 }
 
 function LLMSetting({config, onChange}: LLMSettingProps) {
+  const [editingApiKey, setEditingApiKey] = useState(false)
+
+  const hasStoredApiKey = Boolean(config.api_key_configured && !(config.api_key ?? '').trim())
+  const apiKeyValue = hasStoredApiKey && !editingApiKey ? CONFIGURED_SECRET_MASK : (config.api_key ?? '')
+
+  useEffect(() => {
+    setEditingApiKey(false)
+  }, [config.api_key_configured])
+
   const handleChange = (field: keyof LLMConfig, value: string) => {
     onChange({...config, [field]: value})
   }
@@ -144,11 +159,26 @@ function LLMSetting({config, onChange}: LLMSettingProps) {
                 id="api_key"
                 type="password"
                 placeholder="请填写提供商API密钥"
-                value={config.api_key ?? ''}
-                onChange={(e) => handleChange('api_key', e.target.value)}
+                value={apiKeyValue}
+                onFocus={() => {
+                  if (hasStoredApiKey && !editingApiKey) {
+                    setEditingApiKey(true)
+                  }
+                }}
+                onBlur={() => {
+                  if (!(config.api_key ?? '').trim()) {
+                    setEditingApiKey(false)
+                  }
+                }}
+                onChange={(e) => {
+                  if (!editingApiKey) {
+                    setEditingApiKey(true)
+                  }
+                  handleChange('api_key', e.target.value)
+                }}
               />
               <FieldDescription className="text-xs">
-                请填写模型提供商密钥信息。
+                已配置密钥会以掩码显示；如需更新，请重新输入新密钥。
               </FieldDescription>
             </Field>
             <Field>
@@ -208,6 +238,15 @@ type SearchSettingProps = {
 }
 
 function SearchSetting({config, onChange}: SearchSettingProps) {
+  const [editingApiKey, setEditingApiKey] = useState(false)
+
+  const hasStoredApiKey = Boolean(config.api_key_configured && !(config.api_key ?? '').trim())
+  const apiKeyValue = hasStoredApiKey && !editingApiKey ? CONFIGURED_SECRET_MASK : (config.api_key ?? '')
+
+  useEffect(() => {
+    setEditingApiKey(false)
+  }, [config.api_key_configured])
+
   const handleChange = (field: keyof SearchConfig, value: string) => {
     onChange({...config, [field]: value})
   }
@@ -228,11 +267,26 @@ function SearchSetting({config, onChange}: SearchSettingProps) {
                 id="search_api_key"
                 type="password"
                 placeholder="请填写 SerpAPI API Key"
-                value={config.api_key ?? ''}
-                onChange={(e) => handleChange('api_key', e.target.value)}
+                value={apiKeyValue}
+                onFocus={() => {
+                  if (hasStoredApiKey && !editingApiKey) {
+                    setEditingApiKey(true)
+                  }
+                }}
+                onBlur={() => {
+                  if (!(config.api_key ?? '').trim()) {
+                    setEditingApiKey(false)
+                  }
+                }}
+                onChange={(e) => {
+                  if (!editingApiKey) {
+                    setEditingApiKey(true)
+                  }
+                  handleChange('api_key', e.target.value)
+                }}
               />
               <FieldDescription className="text-xs">
-                默认不内置搜索密钥，请由当前用户自行配置。
+                已配置密钥会以掩码显示；如需更新，请重新输入新密钥。
               </FieldDescription>
             </Field>
           </FieldGroup>
@@ -457,14 +511,19 @@ function MCPSetting({servers, loading, onToggleEnabled, onDelete, onAdd}: MCPSet
 
   const mcpConfigPlaceholder = `{
   "mcpServers": {
-    "qiniu": {
+    "local-example": {
+      "transport": "stdio",
       "command": "uvx",
-      "args": [
-        "qiniu-mcp-server"
-      ],
+      "args": ["qiniu-mcp-server"],
       "env": {
-        "QINIU_ACCESS_KEY": "YOUR_ACCESS_KEY",
-        "QINIU_SECRET_KEY": "YOUR_SECRET_KEY"
+        "QINIU_ACCESS_KEY": "YOUR_ACCESS_KEY"
+      }
+    },
+    "remote-example": {
+      "transport": "streamable_http",
+      "url": "https://example.com/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_TOKEN"
       }
     }
   }
@@ -503,6 +562,8 @@ function MCPSetting({servers, loading, onToggleEnabled, onDelete, onAdd}: MCPSet
                   <DialogDescription className="text-gray-500">
                     Aurora 使用标准的 JSON MCP 配置来创建新服务器。
                     请将您的配置粘贴到下方，然后点击"添加"即可添加新服务器。
+                    <br/>
+                    `env` 只对 `stdio` 本地进程生效；`sse` / `streamable_http` 远程服务请使用 `headers` 传认证信息。
                   </DialogDescription>
                 </DialogHeader>
                 <form
@@ -629,7 +690,21 @@ const SETTING_MENUS: Array<{
   {key: 'mcp-setting', icon: Wrench, title: 'MCP 服务器'},
 ]
 
-export function AuroraSettings() {
+type AuroraSettingsProps = {
+  triggerVariant?: ComponentProps<typeof Button>['variant']
+  triggerSize?: ComponentProps<typeof Button>['size']
+  triggerClassName?: string
+  triggerLabel?: string
+}
+
+export function AuroraSettings({
+  triggerVariant = 'outline',
+  triggerSize = 'icon-sm',
+  triggerClassName,
+  triggerLabel,
+}: AuroraSettingsProps = {}) {
+  const router = useRouter()
+
   // ---- 防止 SSR hydration 不匹配（Radix Dialog 在服务端/客户端生成不同的 aria-controls ID）----
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
@@ -846,22 +921,34 @@ export function AuroraSettings() {
     }
   }, [])
 
+  const handleLogout = useCallback(() => {
+    setOpen(false)
+    clearAuthSession()
+    toast.success('已退出登录')
+    router.replace('/')
+  }, [router])
+
+  const trigger = (
+    <Button
+      variant={triggerVariant}
+      size={triggerSize}
+      className={cn('cursor-pointer', triggerClassName)}
+    >
+      <Settings/>
+      {triggerLabel}
+    </Button>
+  )
+
   // 客户端挂载前，仅渲染普通按钮占位，避免 Radix Dialog SSR hydration 不匹配
   if (!mounted) {
-    return (
-      <Button variant="outline" size="icon-sm" className="cursor-pointer">
-        <Settings/>
-      </Button>
-    )
+    return trigger
   }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {/* 触发按钮 */}
       <DialogTrigger asChild>
-        <Button variant="outline" size="icon-sm" className="cursor-pointer">
-          <Settings/>
-        </Button>
+        {trigger}
       </DialogTrigger>
 
       {/* 弹窗内容 */}
@@ -946,18 +1033,28 @@ export function AuroraSettings() {
         </div>
 
         {/* 底部按钮 */}
-        <DialogFooter className="border-t pt-4">
-          <DialogClose asChild>
-            <Button variant="outline" className="cursor-pointer">取消</Button>
-          </DialogClose>
+        <DialogFooter className="border-t pt-4 sm:justify-between">
           <Button
-            className="cursor-pointer"
-            disabled={saving}
-            onClick={handleSave}
+            variant="ghost"
+            className="cursor-pointer justify-start px-0 text-stone-500 hover:bg-transparent hover:text-stone-900"
+            onClick={handleLogout}
           >
-            {saving && <Loader2 className="animate-spin"/>}
-            保存
+            <LogOut/>
+            退出登录
           </Button>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row">
+            <DialogClose asChild>
+              <Button variant="outline" className="cursor-pointer">取消</Button>
+            </DialogClose>
+            <Button
+              className="cursor-pointer"
+              disabled={saving}
+              onClick={handleSave}
+            >
+              {saving && <Loader2 className="animate-spin"/>}
+              保存
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

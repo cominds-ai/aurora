@@ -5,12 +5,12 @@ import {useRouter} from 'next/navigation'
 import {Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarTrigger} from '@/components/ui/sidebar'
 import {Button} from '@/components/ui/button'
 import {Avatar, AvatarFallback} from '@/components/ui/avatar'
-import {LogOut, Plus} from 'lucide-react'
+import {Plus} from 'lucide-react'
 import {Kbd, KbdGroup} from '@/components/ui/kbd'
 import {SessionList} from '@/components/session-list'
+import {AuroraSettings} from '@/components/aurora-settings'
 import type {AuthUser} from '@/lib/api/types'
-import {clearAuthSession, getAuthSnapshot, subscribeAuthChange} from '@/lib/auth'
-import {toast} from 'sonner'
+import {getAuthSnapshot, subscribeAuthChange} from '@/lib/auth'
 
 export function LeftPanel() {
   const router = useRouter()
@@ -29,12 +29,6 @@ export function LeftPanel() {
     const source = user?.display_name || user?.username || 'AU'
     return source.slice(0, 2).toUpperCase()
   }, [user])
-
-  const handleLogout = () => {
-    clearAuthSession()
-    toast.success('已退出登录')
-    router.replace('/')
-  }
 
   return (
     <Sidebar>
@@ -61,7 +55,7 @@ export function LeftPanel() {
         <SessionList/>
       </SidebarContent>
       <SidebarFooter className="border-t border-stone-200/80 p-3">
-        <div className="rounded-2xl bg-stone-100/80 p-3">
+        <div className="rounded-2xl border border-stone-200/80 bg-white p-3 shadow-sm">
           <div className="flex items-center gap-3">
             <Avatar className="size-10">
               <AvatarFallback className="bg-stone-900 text-sm text-white">
@@ -76,15 +70,11 @@ export function LeftPanel() {
                 {user?.username || '未命名账号'}
               </div>
             </div>
+            <AuroraSettings
+              triggerSize="icon-sm"
+              triggerClassName="ml-auto rounded-full border-stone-200 bg-stone-50 text-stone-700 shadow-none hover:bg-stone-100"
+            />
           </div>
-          <Button
-            variant="outline"
-            className="mt-3 w-full cursor-pointer justify-start rounded-xl border-stone-200 bg-white"
-            onClick={handleLogout}
-          >
-            <LogOut/>
-            退出登录
-          </Button>
         </div>
       </SidebarFooter>
     </Sidebar>

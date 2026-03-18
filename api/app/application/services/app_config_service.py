@@ -71,6 +71,8 @@ class AppConfigService:
 
     async def update_search_config(self, search_config: SearchConfig) -> SearchConfig:
         app_config = await self._load_app_config()
+        if not search_config.api_key.strip():
+            search_config.api_key = app_config.search_config.api_key
         app_config.search_config = search_config
         await self._save_app_config(app_config)
         return app_config.search_config

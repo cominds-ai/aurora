@@ -56,6 +56,7 @@ export type LoginData = {
 export type LLMConfig = {
   base_url?: string;
   api_key?: string;
+  api_key_configured?: boolean;
   model_name?: string;
   temperature?: number;
   max_tokens?: number;
@@ -76,6 +77,7 @@ export type AgentConfig = {
 export type SearchConfig = {
   provider?: string;
   api_key?: string;
+  api_key_configured?: boolean;
   engine?: string;
   gl?: string;
   hl?: string;

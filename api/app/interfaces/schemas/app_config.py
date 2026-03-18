@@ -5,6 +5,23 @@ from pydantic import BaseModel, Field
 from app.domain.models.app_config import MCPTransport
 
 
+class LLMConfigResponse(BaseModel):
+    base_url: str = ""
+    model_name: str = ""
+    temperature: float = 0.7
+    max_tokens: int = 8192
+    vision_enabled: bool = True
+    api_key_configured: bool = False
+
+
+class SearchConfigResponse(BaseModel):
+    provider: str = ""
+    engine: str = ""
+    gl: str = ""
+    hl: str = ""
+    api_key_configured: bool = False
+
+
 class ListMCPServerItem(BaseModel):
     """MCP服务列表条目选项"""
     server_name: str = ""  # 服务名字
