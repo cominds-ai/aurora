@@ -407,6 +407,9 @@ start_ui() {
   cp -R "$UI_ROOT/.next/static" "$UI_STANDALONE_ROOT/.next/static"
   cp -R "$UI_ROOT/public" "$UI_STANDALONE_ROOT/public"
 
+  log "ensuring ui port is still free before start..."
+  ensure_port_free "$UI_PORT" "ui"
+
   log "starting ui..."
   (
     cd "$UI_STANDALONE_ROOT"
@@ -424,6 +427,8 @@ start_ui() {
     tail -n 80 "$LOG_DIR/ui-build.log" || true
     log "ui failed to start, recent runtime log:"
     tail -n 80 "$LOG_DIR/ui.log" || true
+    log "current listeners on port ${UI_PORT}:"
+    lsof -nP -iTCP:"$UI_PORT" -sTCP:LISTEN || true
     exit 1
   fi
 }
