@@ -43,13 +43,12 @@ stop_pid_file() {
 
 ensure_port_free() {
   local port="$1"
-  local label="$2"
   local pids
 
   if command -v lsof >/dev/null 2>&1; then
     pids="$(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)"
   elif command -v ss >/dev/null 2>&1; then
-    pids="$(ss -ltnp "sport = :$port" 2>/dev/null | awk -F 'pid=' 'NR>1 && NF>1 {split($2,a,\",|\"); print a[1]}' | sort -u || true)"
+    pids="$(ss -ltnp "sport = :$port" 2>/dev/null | grep -o 'pid=[0-9]\+' | cut -d= -f2 | sort -u || true)"
   else
     pids=""
   fi
@@ -67,7 +66,7 @@ ensure_port_free() {
   if command -v lsof >/dev/null 2>&1 && lsof -tiTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
     lsof -tiTCP:"$port" -sTCP:LISTEN | xargs kill -9 2>/dev/null || true
   elif command -v ss >/dev/null 2>&1; then
-    pids="$(ss -ltnp "sport = :$port" 2>/dev/null | awk -F 'pid=' 'NR>1 && NF>1 {split($2,a,\",|\"); print a[1]}' | sort -u || true)"
+    pids="$(ss -ltnp "sport = :$port" 2>/dev/null | grep -o 'pid=[0-9]\+' | cut -d= -f2 | sort -u || true)"
     if [ -n "$pids" ]; then
       for pid in $pids; do
         kill -9 "$pid" 2>/dev/null || true
@@ -111,7 +110,7 @@ cd "$ROOT_DIR/api"
 export PATH="$ROOT_DIR/api/.venv/bin:$PATH"
 export PYTHONPATH="$ROOT_DIR/api"
 alembic upgrade head
-nohup env PYTHONPATH="$ROOT_DIR/api" SKIP_STARTUP_MIGRATIONS=1 ./run.sh >"$API_LOG" 2>&1 &
+nohup env ENV="${ENV:-production}" PYTHONPATH="$ROOT_DIR/api" SKIP_STARTUP_MIGRATIONS=1 ./run.sh >"$API_LOG" 2>&1 &
 echo $! >"$API_PID_FILE"
 
 if ! wait_for_http "http://127.0.0.1:${API_PORT}/api/status" "api" 60; then

@@ -8,15 +8,27 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 def _resolve_env_files() -> tuple[str, ...]:
-    env = os.getenv("ENV", "development").lower()
     project_root = Path(__file__).resolve().parents[2]
+    env = os.getenv("ENV")
     default_secrets_file = project_root.parent / ".aurora-secrets.env"
     secrets_file = os.getenv("AURORA_SECRETS_FILE")
+    primary_env_file = project_root / ".env"
+    fallback_env_file = project_root / ".env.example"
 
-    if env == "production":
-        env_files = [str(project_root / ".env")]
+    if env:
+        env = env.lower()
+        if env == "production" and primary_env_file.exists():
+            env_files = [str(primary_env_file)]
+        elif fallback_env_file.exists():
+            env_files = [str(fallback_env_file)]
+        else:
+            env_files = []
+    elif primary_env_file.exists():
+        env_files = [str(primary_env_file)]
+    elif fallback_env_file.exists():
+        env_files = [str(fallback_env_file)]
     else:
-        env_files = [str(project_root / ".env.example")]
+        env_files = []
 
     if secrets_file:
         env_files.append(secrets_file)
