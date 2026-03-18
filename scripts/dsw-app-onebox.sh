@@ -20,8 +20,6 @@ API_PORT="${API_PORT:-8000}"
 UI_PORT="${UI_PORT:-3000}"
 DEFAULT_DB_NAME="${POSTGRES_DB:-aurora}"
 
-: "${NEXT_PUBLIC_API_BASE_URL:?NEXT_PUBLIC_API_BASE_URL is required, e.g. http://<api-service-host>:8000/api}"
-
 if [ "$(id -u)" -eq 0 ]; then
   SUDO=""
 else
@@ -482,6 +480,8 @@ main() {
     log "secrets file not found, continuing without it: $SECRETS_FILE"
   fi
   set +a
+
+  : "${NEXT_PUBLIC_API_BASE_URL:?NEXT_PUBLIC_API_BASE_URL is required, e.g. http://<api-service-host>:8000/api}"
 
   start_api
   start_ui
