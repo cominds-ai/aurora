@@ -4,6 +4,7 @@ set -euo pipefail
 SOURCE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_ROOT="${AURORA_RUNTIME_ROOT:-/root/aurora-runtime}"
 UI_ROOT="${AURORA_UI_RUNTIME_ROOT:-/root/aurora-ui-runtime}"
+UI_STANDALONE_ROOT="${AURORA_UI_STANDALONE_ROOT:-/root/aurora-ui-standalone}"
 STATE_ROOT="${AURORA_STATE_ROOT:-$(cd "$SOURCE_ROOT/.." && pwd)/aurora-state}"
 SECRETS_FILE="${AURORA_SECRETS_FILE:-$(cd "$SOURCE_ROOT/.." && pwd)/.aurora-secrets.env}"
 LOG_DIR="$STATE_ROOT/logs"
@@ -350,6 +351,7 @@ start_ui() {
   safe_remove_path "$UI_ROOT/node_modules"
   safe_remove_path "$UI_ROOT/.next"
   safe_remove_path "$UI_ROOT/package-lock.json"
+  safe_remove_path "$UI_STANDALONE_ROOT"
 
   log "installing ui dependencies in standalone mode..."
   (
@@ -388,22 +390,31 @@ start_ui() {
     exit 1
   fi
 
-  log "building ui..."
+  log "building ui with webpack..."
   if ! (
     cd "$UI_ROOT"
-    NEXT_PUBLIC_API_BASE_URL="$NEXT_PUBLIC_API_BASE_URL" npm run build >"$LOG_DIR/ui-build.log" 2>&1
+    NEXT_PUBLIC_API_BASE_URL="$NEXT_PUBLIC_API_BASE_URL" npm run build -- --webpack >"$LOG_DIR/ui-build.log" 2>&1
   ); then
     log "ui build failed, recent build log:"
     tail -n 120 "$LOG_DIR/ui-build.log" || true
     exit 1
   fi
 
+  log "preparing standalone ui runtime..."
+  mkdir -p "$UI_STANDALONE_ROOT"
+  cp -R "$UI_ROOT/.next/standalone/." "$UI_STANDALONE_ROOT/"
+  mkdir -p "$UI_STANDALONE_ROOT/.next"
+  cp -R "$UI_ROOT/.next/static" "$UI_STANDALONE_ROOT/.next/static"
+  cp -R "$UI_ROOT/public" "$UI_STANDALONE_ROOT/public"
+
   log "starting ui..."
   (
-    cd "$UI_ROOT"
+    cd "$UI_STANDALONE_ROOT"
     nohup env \
       NEXT_PUBLIC_API_BASE_URL="$NEXT_PUBLIC_API_BASE_URL" \
-      npm run start -- --hostname 0.0.0.0 --port "$UI_PORT" \
+      PORT="$UI_PORT" \
+      HOSTNAME="0.0.0.0" \
+      node server.js \
       >"$LOG_DIR/ui.log" 2>&1 &
     echo $! >"$RUN_DIR/ui.pid"
   )
@@ -456,6 +467,7 @@ main() {
 [aurora-dsw] one-box app stack started
 [aurora-dsw] app root: $APP_ROOT
 [aurora-dsw] ui root: $UI_ROOT
+[aurora-dsw] ui standalone root: $UI_STANDALONE_ROOT
 [aurora-dsw] state root: $STATE_ROOT
 [aurora-dsw] secrets file: $SECRETS_FILE
 [aurora-dsw] ui url: http://127.0.0.1:${UI_PORT}
