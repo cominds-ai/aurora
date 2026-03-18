@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PARENT_DIR="$(cd "$ROOT_DIR/.." && pwd)"
 LOG_DIR="$ROOT_DIR/.logs/dsw"
 RUN_DIR="$LOG_DIR/run"
 API_LOG="$LOG_DIR/api.log"
@@ -14,9 +15,15 @@ UI_PORT="${UI_PORT:-3000}"
 
 mkdir -p "$LOG_DIR" "$RUN_DIR"
 
-: "${NEXT_PUBLIC_API_BASE_URL:?NEXT_PUBLIC_API_BASE_URL is required}"
-: "${SQLALCHEMY_DATABASE_URI:?SQLALCHEMY_DATABASE_URI is required}"
-: "${REDIS_HOST:?REDIS_HOST is required}"
+load_env_file() {
+  local file="$1"
+  if [ -f "$file" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    . "$file"
+    set +a
+  fi
+}
 
 stop_pid_file() {
   local pid_file="$1"
@@ -86,6 +93,14 @@ wait_for_http() {
   echo "[aurora] $label failed to become ready: $url" >&2
   return 1
 }
+
+load_env_file "$ROOT_DIR/.env"
+load_env_file "$ROOT_DIR/.aurora-secrets.env"
+load_env_file "$PARENT_DIR/.aurora-secrets.env"
+
+: "${NEXT_PUBLIC_API_BASE_URL:?NEXT_PUBLIC_API_BASE_URL is required}"
+: "${SQLALCHEMY_DATABASE_URI:?SQLALCHEMY_DATABASE_URI is required}"
+: "${REDIS_HOST:?REDIS_HOST is required}"
 
 stop_pid_file "$API_PID_FILE"
 stop_pid_file "$UI_PID_FILE"
