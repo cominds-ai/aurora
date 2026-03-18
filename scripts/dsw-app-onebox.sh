@@ -390,10 +390,10 @@ start_ui() {
     exit 1
   fi
 
-  log "building ui with webpack..."
+  log "building ui..."
   if ! (
     cd "$UI_ROOT"
-    NEXT_PUBLIC_API_BASE_URL="$NEXT_PUBLIC_API_BASE_URL" npm run build -- --webpack >"$LOG_DIR/ui-build.log" 2>&1
+    NEXT_PUBLIC_API_BASE_URL="$NEXT_PUBLIC_API_BASE_URL" npm run build >"$LOG_DIR/ui-build.log" 2>&1
   ); then
     log "ui build failed, recent build log:"
     tail -n 120 "$LOG_DIR/ui-build.log" || true
