@@ -110,7 +110,7 @@ cd "$ROOT_DIR/api"
 export PATH="$ROOT_DIR/api/.venv/bin:$PATH"
 export PYTHONPATH="$ROOT_DIR/api"
 alembic upgrade head
-nohup env ENV="${ENV:-production}" PYTHONPATH="$ROOT_DIR/api" SKIP_STARTUP_MIGRATIONS=1 ./run.sh >"$API_LOG" 2>&1 &
+nohup env ENV="${ENV:-production}" PYTHONPATH="$ROOT_DIR/api" SKIP_STARTUP_MIGRATIONS=1 bash ./run.sh >"$API_LOG" 2>&1 &
 echo $! >"$API_PID_FILE"
 
 if ! wait_for_http "http://127.0.0.1:${API_PORT}/api/status" "api" 60; then
