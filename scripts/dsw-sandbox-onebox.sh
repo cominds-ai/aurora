@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-WORKSPACE_ROOT="$ROOT_DIR"
+SOURCE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+WORKSPACE_ROOT="${AURORA_SANDBOX_RUNTIME_ROOT:-/root/aurora-sandbox-runtime}"
 SANDBOX_ROOT="$WORKSPACE_ROOT/sandbox"
-STATE_ROOT="${AURORA_SANDBOX_STATE_ROOT:-$(cd "$ROOT_DIR/.." && pwd)/aurora-sandbox-state}"
+STATE_ROOT="${AURORA_SANDBOX_STATE_ROOT:-$(cd "$SOURCE_ROOT/.." && pwd)/aurora-sandbox-state}"
 LOG_DIR="$STATE_ROOT/logs"
 RUN_DIR="$STATE_ROOT/run"
 ENV_FILE="$SANDBOX_ROOT/.env"
@@ -111,7 +111,7 @@ ensure_apt_packages() {
     build-essential \
     supervisor xterm socat xvfb x11vnc websockify \
     fonts-noto-cjk fonts-noto-color-emoji language-pack-zh-hans locales \
-    netcat-openbsd lsof
+    netcat-openbsd lsof rsync
 }
 
 ensure_locale() {
@@ -173,6 +173,7 @@ ensure_ubuntu_user() {
 }
 
 ensure_env_file() {
+  mkdir -p "$SANDBOX_ROOT"
   cat > "$ENV_FILE" <<EOF
 LOG_LEVEL=${SANDBOX_LOG_LEVEL}
 SERVER_TIMEOUT_MINUTES=${SANDBOX_TIMEOUT_MINUTES}
@@ -180,6 +181,22 @@ SCREEN_WIDTH=${SANDBOX_SCREEN_WIDTH}
 SCREEN_HEIGHT=${SANDBOX_SCREEN_HEIGHT}
 EOF
   log "generated sandbox env at $ENV_FILE"
+}
+
+sync_source_to_runtime() {
+  log "syncing source to local runtime directory..."
+  mkdir -p "$WORKSPACE_ROOT"
+  rsync -a --delete \
+    --exclude '.git/' \
+    --exclude '.DS_Store' \
+    --exclude '.uv-cache/' \
+    --exclude '.uv-python/' \
+    --exclude 'aurora-state/' \
+    --exclude 'aurora-sandbox-state/' \
+    --exclude 'api/.venv/' \
+    --exclude 'sandbox/.venv/' \
+    --exclude 'sandbox/node_modules/' \
+    "$SOURCE_ROOT/" "$WORKSPACE_ROOT/"
 }
 
 start_sandbox() {
@@ -255,7 +272,9 @@ main() {
   require_command npm
   require_command chromium
   require_command /usr/bin/supervisord
+  require_command rsync
 
+  sync_source_to_runtime
   ensure_env_file
   start_sandbox
 

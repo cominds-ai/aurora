@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_ROOT="$ROOT_DIR"
-STATE_ROOT="${AURORA_STATE_ROOT:-$(cd "$ROOT_DIR/.." && pwd)/aurora-state}"
-SECRETS_FILE="${AURORA_SECRETS_FILE:-$(cd "$ROOT_DIR/.." && pwd)/.aurora-secrets.env}"
+SOURCE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+APP_ROOT="${AURORA_RUNTIME_ROOT:-/root/aurora-runtime}"
+STATE_ROOT="${AURORA_STATE_ROOT:-$(cd "$SOURCE_ROOT/.." && pwd)/aurora-state}"
+SECRETS_FILE="${AURORA_SECRETS_FILE:-$(cd "$SOURCE_ROOT/.." && pwd)/.aurora-secrets.env}"
 LOG_DIR="$STATE_ROOT/logs"
 RUN_DIR="$STATE_ROOT/run"
 POSTGRES_DATA="$STATE_ROOT/postgres"
 REDIS_DATA="$STATE_ROOT/redis"
 REDIS_CONF="$REDIS_DATA/redis.conf"
-ENV_FILE="$ROOT_DIR/.env"
+ENV_FILE="$SOURCE_ROOT/.env"
 
 POSTGRES_PORT="${POSTGRES_PORT:-5432}"
 REDIS_PORT="${REDIS_PORT:-6379}"
@@ -33,6 +33,22 @@ export UV_PYTHON_INSTALL_DIR="$APP_ROOT/.uv-python"
 
 log() {
   printf '[aurora-dsw] %s\n' "$*"
+}
+
+safe_remove_path() {
+  local path="$1"
+
+  if [ ! -e "$path" ]; then
+    return
+  fi
+
+  if rm -rf "$path" 2>/dev/null; then
+    return
+  fi
+
+  local backup="${path}.bak.$(date +%s)"
+  log "failed to remove $path directly, moving it aside: $backup"
+  mv "$path" "$backup"
 }
 
 require_command() {
@@ -126,7 +142,7 @@ ensure_apt_packages() {
   $SUDO apt-get update
   $SUDO apt-get install -y \
     git curl wget ca-certificates gnupg build-essential software-properties-common \
-    libpq-dev postgresql postgresql-contrib redis-server netcat-openbsd
+    libpq-dev postgresql postgresql-contrib redis-server netcat-openbsd rsync
 }
 
 ensure_node() {
@@ -253,6 +269,24 @@ EOF
   log "generated .env at $ENV_FILE"
 }
 
+sync_source_to_runtime() {
+  log "syncing source to local runtime directory..."
+  mkdir -p "$APP_ROOT"
+  rsync -a --delete \
+    --exclude '.git/' \
+    --exclude '.DS_Store' \
+    --exclude '.uv-cache/' \
+    --exclude '.uv-python/' \
+    --exclude 'aurora-state/' \
+    --exclude 'aurora-sandbox-state/' \
+    --exclude 'api/.venv/' \
+    --exclude 'sandbox/.venv/' \
+    --exclude 'ui/node_modules/' \
+    --exclude 'ui/.next/' \
+    --exclude 'ui/package-lock.json' \
+    "$SOURCE_ROOT/" "$APP_ROOT/"
+}
+
 start_api() {
   stop_pid_file "$RUN_DIR/api.pid"
   ensure_port_free "$API_PORT" "api"
@@ -299,7 +333,9 @@ start_ui() {
   : >"$LOG_DIR/ui.log"
 
   log "cleaning previous ui install artifacts..."
-  rm -rf "$APP_ROOT/ui/node_modules" "$APP_ROOT/ui/.next" "$APP_ROOT/ui/package-lock.json"
+  safe_remove_path "$APP_ROOT/ui/node_modules"
+  safe_remove_path "$APP_ROOT/ui/.next"
+  safe_remove_path "$APP_ROOT/ui/package-lock.json"
 
   log "installing ui dependencies in standalone mode..."
   (
@@ -356,10 +392,12 @@ main() {
   require_command node
   require_command npm
   require_command redis-server
+  require_command rsync
 
   ensure_postgres_cluster
   ensure_redis
   ensure_env_file
+  sync_source_to_runtime
 
   set -a
   # shellcheck disable=SC1090
