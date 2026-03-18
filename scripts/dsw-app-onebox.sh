@@ -65,8 +65,13 @@ ensure_port_free() {
   local port="$1"
   local label="$2"
   local pids
-
-  pids="$(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)"
+  if command -v lsof >/dev/null 2>&1; then
+    pids="$(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)"
+  elif command -v ss >/dev/null 2>&1; then
+    pids="$(ss -ltnp "sport = :$port" 2>/dev/null | awk -F 'pid=' 'NR>1 && NF>1 {split($2,a,\",|\"); print a[1]}' | sort -u || true)"
+  else
+    pids=""
+  fi
   if [ -z "$pids" ]; then
     return
   fi
@@ -81,10 +86,19 @@ ensure_port_free() {
 
   sleep 1
 
-  if lsof -tiTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
+  if command -v lsof >/dev/null 2>&1 && lsof -tiTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
     log "force stopping remaining listener on port $port"
     lsof -tiTCP:"$port" -sTCP:LISTEN | xargs kill -9 2>/dev/null || true
     sleep 1
+  elif command -v ss >/dev/null 2>&1; then
+    pids="$(ss -ltnp "sport = :$port" 2>/dev/null | awk -F 'pid=' 'NR>1 && NF>1 {split($2,a,\",|\"); print a[1]}' | sort -u || true)"
+    if [ -n "$pids" ]; then
+      log "force stopping remaining listener on port $port"
+      for pid in $pids; do
+        kill -9 "$pid" 2>/dev/null || true
+      done
+      sleep 1
+    fi
   fi
 }
 
@@ -428,7 +442,11 @@ start_ui() {
     log "ui failed to start, recent runtime log:"
     tail -n 80 "$LOG_DIR/ui.log" || true
     log "current listeners on port ${UI_PORT}:"
-    lsof -nP -iTCP:"$UI_PORT" -sTCP:LISTEN || true
+    if command -v lsof >/dev/null 2>&1; then
+      lsof -nP -iTCP:"$UI_PORT" -sTCP:LISTEN || true
+    elif command -v ss >/dev/null 2>&1; then
+      ss -ltnp "sport = :$UI_PORT" || true
+    fi
     exit 1
   fi
 }
