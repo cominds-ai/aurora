@@ -46,8 +46,8 @@ JSON 输出示例：
     "success": true,
     "result": "我们已经完成了数据清洗任务，并生成了摘要。",
     "attachments": [
-        "/home/ubuntu/file1.md",
-        "/home/ubuntu/file2.md"
+        "{workspace_dir}/file1.md",
+        "{workspace_dir}/file2.md"
     ]
 }}
 
@@ -56,6 +56,8 @@ JSON 输出示例：
 - attachments: 用户提供的附件
 - language: 当前的工作语言
 - task: 当前需要执行的任务
+- workspace_dir: 当前任务会话的独立工作目录
+- upload_dir: 当前任务会话的附件目录
 
 输出：
 - JSON 格式的步骤执行结果
@@ -71,6 +73,12 @@ JSON 输出示例：
 
 任务(task):
 {step}
+
+当前会话工作目录(workspace_dir):
+{workspace_dir}
+
+当前会话附件目录(upload_dir):
+{upload_dir}
 """
 
 # 汇总总结提示词模板，将历史信息进行相应的总结
@@ -81,6 +89,7 @@ SUMMARIZE_PROMPT = """
 - 你应该详细向用户解释最终结果。
 - 如有必要，编写 Markdown 格式的内容以清晰地呈现结果。
 - 如果之前的步骤生成了文件，必须通过文件工具或附件字段交付给用户。
+- 所有最终交付文件都必须位于当前会话工作目录中。
 
 返回格式要求：
 - 必须返回符合以下 TypeScript 接口定义的 JSON 格式。
@@ -100,8 +109,8 @@ JSON 输出示例：
 {{
     "message": "任务已完成。我已经为您处理了所有数据，主要发现如下：\n1. 增长率...\n2. 异常值...\n详细报告请查看附件。",
     "attachments": [
-        "/home/ubuntu/report.md",
-        "/home/ubuntu/data.csv"
+        "{workspace_dir}/report.md",
+        "{workspace_dir}/data.csv"
     ]
 }}
 """

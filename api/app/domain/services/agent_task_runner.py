@@ -27,6 +27,7 @@ from app.domain.repositories.uow import IUnitOfWork
 from app.domain.services.flows.planner_react import PlannerReActFlow
 from app.domain.services.tools.a2a import A2ATool
 from app.domain.services.tools.mcp import MCPTool
+from app.application.services.sandbox_service import SandboxService
 
 logger = logging.getLogger(__name__)
 
@@ -47,12 +48,14 @@ class AgentTaskRunner(TaskRunner):
             browser: Browser,  # 浏览器
             search_engine: SearchEngine,  # 搜索引擎
             sandbox: Sandbox,  # 沙箱
+            sandbox_service: SandboxService,  # 沙箱服务
     ) -> None:
         """构造函数，完成Agent任务运行器的创建"""
         self._uow_factory = uow_factory
         self._uow = uow_factory()
         self._session_id = session_id
         self._sandbox = sandbox
+        self._sandbox_service = sandbox_service
         self._mcp_config = mcp_config
         self._mcp_tool = MCPTool()
         self._a2a_config = a2a_config
@@ -104,7 +107,7 @@ class AgentTaskRunner(TaskRunner):
             file_data, file = await self._file_storage.download_file(file_id)
 
             # 2.组装沙箱文件路径
-            filepath = f"/home/ubuntu/upload/{file.filename}"
+            filepath = f"{SandboxService.get_upload_dir(self._session_id)}/{file.filename}"
 
             # 3.调用沙箱将文件上传至沙箱
             tool_result = await self._sandbox.upload_file(
@@ -455,3 +458,23 @@ class AgentTaskRunner(TaskRunner):
     async def on_done(self, task: Task) -> None:
         """任务结束时执行的回调函数"""
         logger.info(f"AgentTaskRunner任务执行结束")
+        try:
+            if self._sandbox:
+                await self._sandbox.destroy()
+        except Exception as e:
+            logger.warning(f"关闭会话[{self._session_id}]沙箱客户端失败: {e}")
+
+        try:
+            await self._sandbox_service.release_session_binding(self._session_id)
+        except Exception as e:
+            logger.warning(f"释放会话[{self._session_id}]沙箱绑定失败: {e}")
+
+        try:
+            async with self._uow_factory() as uow:
+                session = await uow.session.get_by_id(self._session_id)
+                if session is not None:
+                    session.sandbox_id = None
+                    session.task_id = None
+                    await uow.session.save(session)
+        except Exception as e:
+            logger.warning(f"清理会话[{self._session_id}]沙箱状态失败: {e}")

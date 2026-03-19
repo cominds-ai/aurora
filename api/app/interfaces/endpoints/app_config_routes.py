@@ -1,19 +1,26 @@
 import logging
 from typing import Optional, Dict
 
-from fastapi import APIRouter, Depends, Body
+from fastapi import APIRouter, Depends, Body, HTTPException
 
 from app.application.services.app_config_service import AppConfigService
 from app.application.services.sandbox_service import SandboxService
+from app.domain.models.system_config import SystemConfig
 from app.domain.models.app_config import LLMConfig, AgentConfig, MCPConfig, SearchConfig, SandboxPreference
 from app.domain.models.user import User
 from app.interfaces.schemas.app_config import ListMCPServerResponse, ListA2AServerResponse, ListSandboxOptionResponse, \
-    SandboxOptionItem, SandboxPreferenceStatusResponse, LLMConfigResponse, SearchConfigResponse
+    SandboxOptionItem, SandboxPreferenceStatusResponse, LLMConfigResponse, SearchConfigResponse, \
+    SystemSandboxPoolResponse
 from app.interfaces.schemas.base import Response
 from app.interfaces.service_dependencies import get_app_config_service, get_sandbox_service, get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/app-config", tags=["设置模块"])
+
+
+def ensure_sandbox_pool_admin(current_user: User) -> None:
+    if current_user.username != "fh":
+        raise HTTPException(status_code=403, detail="当前用户无权管理沙箱池")
 
 
 @router.get(
@@ -175,9 +182,7 @@ async def update_sandbox_preference(
         preferred_sandbox_host=sandbox_preference.preferred_sandbox_host
     )
     if normalized_preference.preferred_sandbox_host:
-        await sandbox_service.assign_for_user(current_user.id, normalized_preference)
-    else:
-        await sandbox_service.clear_binding_for_user(current_user.id)
+        await sandbox_service.validate_manual_host(normalized_preference.preferred_sandbox_host)
 
     updated = await app_config_service.update_sandbox_preference(normalized_preference)
     return Response.success(data=updated.model_dump(), msg="更新沙箱偏好成功")
@@ -191,11 +196,54 @@ async def update_sandbox_preference(
 async def list_sandboxes(
         sandbox_service: SandboxService = Depends(get_sandbox_service),
 ) -> Response[ListSandboxOptionResponse]:
-    sandboxes = await sandbox_service.list_available_sandboxes()
+    sandboxes = await sandbox_service.list_sandbox_pool_status()
     return Response.success(
         data=ListSandboxOptionResponse(
-            sandboxes=[SandboxOptionItem(sandbox_id=item.sandbox_id, label=item.label) for item in sandboxes]
+            sandboxes=[
+                SandboxOptionItem(
+                    sandbox_id=item.sandbox_id,
+                    label=item.label,
+                    host=item.host,
+                    available=item.available,
+                    healthy=item.healthy,
+                    bound_user_id=item.bound_user_id,
+                    bound_session_id=item.bound_session_id,
+                )
+                for item in sandboxes
+            ]
         )
+    )
+
+
+@router.get(
+    path="/system/sandbox-pool",
+    response_model=Response[SystemSandboxPoolResponse],
+    summary="获取系统沙箱池配置",
+)
+async def get_system_sandbox_pool(
+        current_user: User = Depends(get_current_user),
+        sandbox_service: SandboxService = Depends(get_sandbox_service),
+) -> Response[SystemSandboxPoolResponse]:
+    ensure_sandbox_pool_admin(current_user)
+    system_config = await sandbox_service.get_system_sandbox_pool()
+    return Response.success(data=SystemSandboxPoolResponse(sandbox_pool=system_config.sandbox_pool))
+
+
+@router.post(
+    path="/system/sandbox-pool",
+    response_model=Response[SystemSandboxPoolResponse],
+    summary="更新系统沙箱池配置",
+)
+async def update_system_sandbox_pool(
+        request: SystemSandboxPoolResponse,
+        current_user: User = Depends(get_current_user),
+        sandbox_service: SandboxService = Depends(get_sandbox_service),
+) -> Response[SystemSandboxPoolResponse]:
+    ensure_sandbox_pool_admin(current_user)
+    system_config = await sandbox_service.update_system_sandbox_pool(request.sandbox_pool)
+    return Response.success(
+        msg="系统沙箱池配置更新成功",
+        data=SystemSandboxPoolResponse(sandbox_pool=system_config.sandbox_pool),
     )
 
 

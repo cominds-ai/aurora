@@ -2,6 +2,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
+from app.domain.models.system_config import SandboxPoolItem
 from app.domain.models.app_config import MCPTransport
 
 
@@ -55,11 +56,19 @@ class ListA2AServerResponse(BaseModel):
 class SandboxOptionItem(BaseModel):
     sandbox_id: str
     label: str
+    host: str = ""
+    available: bool = False
+    healthy: bool = False
     bound_user_id: Optional[str] = None
+    bound_session_id: Optional[str] = None
 
 
 class ListSandboxOptionResponse(BaseModel):
     sandboxes: List[SandboxOptionItem] = Field(default_factory=list)
+
+
+class SystemSandboxPoolResponse(BaseModel):
+    sandbox_pool: List[SandboxPoolItem] = Field(default_factory=list)
 
 
 class SandboxPreferenceStatusResponse(BaseModel):

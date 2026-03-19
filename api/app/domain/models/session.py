@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Literal
 
 from pydantic import BaseModel, Field
 
@@ -33,6 +33,11 @@ class Session(BaseModel):
     files: List[File] = Field(default_factory=list)  # 文件列表
     memories: Dict[str, Memory] = Field(default_factory=dict)  # 记忆
     status: SessionStatus = SessionStatus.PENDING  # 状态
+    waiting_reason: Optional[Literal["sandbox", "user"]] = None  # 等待原因，仅用于接口返回
+    sandbox_queue_position: Optional[int] = None  # 沙箱排队位置(1-based)
+    sandbox_queue_size: int = 0  # 当前沙箱队列总人数
+    sandbox_active: bool = False  # 当前是否持有沙箱
+    sandbox_status_text: str = ""  # 当前沙箱状态文案
     updated_at: datetime = Field(default_factory=datetime.now)  # 更新时间
     created_at: datetime = Field(default_factory=datetime.now)  # 创建时间
 

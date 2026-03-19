@@ -1,6 +1,7 @@
 import logging
 from typing import AsyncGenerator
 
+from app.application.services.sandbox_service import SandboxService
 from app.domain.models.event import (
     StepEventStatus,
     StepEvent,
@@ -27,6 +28,14 @@ class ReActAgent(BaseAgent):
     _system_prompt: str = SYSTEM_PROMPT + REACT_SYSTEM_PROMPT
     _format: str = "json_object"  # format控制的是content、工具调用控制的是tool_calls两者不冲突
 
+    @property
+    def workspace_dir(self) -> str:
+        return SandboxService.get_workspace_dir(self._session_id)
+
+    @property
+    def upload_dir(self) -> str:
+        return SandboxService.get_upload_dir(self._session_id)
+
     async def execute_step(self, plan: Plan, step: Step, message: Message) -> AsyncGenerator[BaseEvent, None]:
         """根据传递的消息+规划+子步骤，执行相应的子步骤"""
         # 1.根据传递的内容生成执行消息
@@ -35,6 +44,8 @@ class ReActAgent(BaseAgent):
             attachments="\n".join([attachment.filepath for attachment in message.attachments]),
             language=plan.language,
             step=step.description,
+            workspace_dir=self.workspace_dir,
+            upload_dir=self.upload_dir,
         )
 
         # 2.更新步骤的执行状态为运行中并返回Step事件
@@ -95,7 +106,7 @@ class ReActAgent(BaseAgent):
     async def summarize(self) -> AsyncGenerator[BaseEvent, None]:
         """调用Agent汇总历史的消息并生成最终回复+附件"""
         # 1.构建请求query
-        query = SUMMARIZE_PROMPT
+        query = SUMMARIZE_PROMPT.format(workspace_dir=self.workspace_dir)
 
         # 2.调用invoke方法获取Agent生成的事件
         async for event in self.invoke(query):

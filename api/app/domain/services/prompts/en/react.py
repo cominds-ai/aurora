@@ -47,14 +47,16 @@ EXAMPLE JSON OUTPUT:
     "success": true,
     "result": "We have finished the task",
     "attachments": [
-        "/home/ubuntu/file1.md",
-        "/home/ubuntu/file2.md"
+        "{workspace_dir}/file1.md",
+        "{workspace_dir}/file2.md"
     ],
 }}
 
 Input:
 - message: the user's message, use this language for all text output
 - attachments: the user's attachments
+- workspace_dir: the dedicated workspace directory for this session
+- upload_dir: the upload directory for this session
 - task: the task to execute
 
 Output:
@@ -71,6 +73,12 @@ Working Language:
 
 Task:
 {step}
+
+Workspace Directory:
+{workspace_dir}
+
+Upload Directory:
+{upload_dir}
 """
 
 # 汇总总结提示词模板，将历史信息进行相应的总结
@@ -101,8 +109,8 @@ EXAMPLE JSON OUTPUT:
 {{
     "message": "Summary message",
     "attachments": [
-        "/home/ubuntu/file1.md",
-        "/home/ubuntu/file2.md"
+        "{workspace_dir}/file1.md",
+        "{workspace_dir}/file2.md"
     ]
 }}
 """

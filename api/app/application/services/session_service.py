@@ -4,7 +4,7 @@ from typing import List, Callable
 from app.application.errors.exceptions import NotFoundError, ServerRequestsError
 from app.domain.models.file import File
 from app.domain.models.app_config import SandboxPreference
-from app.domain.models.session import Session
+from app.domain.models.session import Session, SessionStatus
 from app.domain.models.user import User
 from app.domain.repositories.uow import IUnitOfWork
 from app.interfaces.schemas.session import FileReadResponse, ShellReadResponse
@@ -42,10 +42,70 @@ class SessionService:
         logger.info(f"成功创建一个新任务会话: {session.id}")
         return session
 
+    async def _attach_queue_state(self, session: Session) -> Session:
+        queue_status = await self._sandbox_service.get_queue_status(session.id)
+        binding = await self._sandbox_service.get_binding(session.id)
+        session.waiting_reason = None
+        session.sandbox_queue_position = None
+        session.sandbox_queue_size = 0
+        session.sandbox_active = binding is not None
+        session.sandbox_status_text = "未占用"
+
+        if queue_status is not None:
+            session.status = SessionStatus.WAITING
+            session.waiting_reason = "sandbox"
+            session.sandbox_queue_position = queue_status.position
+            session.sandbox_queue_size = queue_status.size
+            if queue_status.position > 1:
+                session.sandbox_status_text = f"排队中，前方 {queue_status.position - 1} 个对话"
+            else:
+                session.sandbox_status_text = "排队中，当前队首"
+            return session
+
+        if binding is not None:
+            session.sandbox_status_text = "沙箱占用中"
+            return session
+
+        if session.status == SessionStatus.WAITING:
+            session.waiting_reason = "user"
+            session.sandbox_status_text = "沙箱已释放"
+        elif session.status == SessionStatus.COMPLETED:
+            session.sandbox_status_text = "沙箱已释放"
+        return session
+
+    async def _attach_queue_states(self, sessions: List[Session]) -> List[Session]:
+        queue_statuses = await self._sandbox_service.list_queue_statuses()
+        for session in sessions:
+            binding = await self._sandbox_service.get_binding(session.id)
+            queue_status = queue_statuses.get(session.id)
+            session.waiting_reason = None
+            session.sandbox_queue_position = None
+            session.sandbox_queue_size = 0
+            session.sandbox_active = binding is not None
+            session.sandbox_status_text = "未占用"
+            if queue_status is not None:
+                session.status = SessionStatus.WAITING
+                session.waiting_reason = "sandbox"
+                session.sandbox_queue_position = queue_status.position
+                session.sandbox_queue_size = queue_status.size
+                if queue_status.position > 1:
+                    session.sandbox_status_text = f"排队中，前方 {queue_status.position - 1} 个对话"
+                else:
+                    session.sandbox_status_text = "排队中，当前队首"
+            elif binding is not None:
+                session.sandbox_status_text = "沙箱占用中"
+            elif session.status == SessionStatus.WAITING:
+                session.waiting_reason = "user"
+                session.sandbox_status_text = "沙箱已释放"
+            elif session.status == SessionStatus.COMPLETED:
+                session.sandbox_status_text = "沙箱已释放"
+        return sessions
+
     async def get_all_sessions(self) -> List[Session]:
         """获取项目所有任务会话列表"""
         async with self._uow:
-            return await self._uow.session.get_all(self._current_user.id)
+            sessions = await self._uow.session.get_all(self._current_user.id)
+        return await self._attach_queue_states(sessions)
 
     async def clear_unread_message_count(self, session_id: str) -> None:
         """清空指定会话未读消息数"""
@@ -64,6 +124,7 @@ class SessionService:
             raise NotFoundError(f"会话[{session_id}]不存在, 删除失败")
 
         # 2.根据传递的会话id删除会话
+        await self._sandbox_service.release_session_binding(session_id)
         async with self._uow:
             await self._uow.session.delete_by_id(session_id)
         logger.info(f"删除会话[{session_id}]成功")
@@ -73,7 +134,7 @@ class SessionService:
         async with self._uow:
             session = await self._uow.session.get_by_id(session_id)
         if session and session.user_id == self._current_user.id:
-            return session
+            return await self._attach_queue_state(session)
         return None
 
     async def get_session_files(self, session_id: str) -> List[File]:
@@ -100,7 +161,7 @@ class SessionService:
         sandbox_preference = await self._get_sandbox_preference()
         sandbox = await self._sandbox_service.get_session_sandbox(
             self._current_user.id,
-            session.sandbox_id,
+            session.id,
             sandbox_preference,
         )
         if not sandbox:
@@ -128,7 +189,7 @@ class SessionService:
         sandbox_preference = await self._get_sandbox_preference()
         sandbox = await self._sandbox_service.get_session_sandbox(
             self._current_user.id,
-            session.sandbox_id,
+            session.id,
             sandbox_preference,
         )
         if not sandbox:
@@ -156,7 +217,7 @@ class SessionService:
         sandbox_preference = await self._get_sandbox_preference()
         sandbox = await self._sandbox_service.get_session_sandbox(
             self._current_user.id,
-            session.sandbox_id,
+            session.id,
             sandbox_preference,
         )
         if not sandbox:

@@ -99,11 +99,24 @@ export type SandboxPreferenceStatus = {
 export type SandboxOption = {
   sandbox_id: string;
   label: string;
+  host: string;
+  available: boolean;
+  healthy: boolean;
   bound_user_id?: string | null;
+  bound_session_id?: string | null;
 };
 
 export type SandboxOptionsData = {
   sandboxes: SandboxOption[];
+};
+
+export type SandboxPoolItem = {
+  host: string;
+  label?: string | null;
+};
+
+export type SystemSandboxPoolData = {
+  sandbox_pool: SandboxPoolItem[];
 };
 
 /**
@@ -210,6 +223,11 @@ export type Session = {
   latest_message_at: string;
   status: SessionStatus;
   unread_message_count: number;
+  waiting_reason?: "sandbox" | "user" | null;
+  sandbox_queue_position?: number | null;
+  sandbox_queue_size?: number;
+  sandbox_active?: boolean;
+  sandbox_status_text?: string;
   [key: string]: unknown;
 };
 
@@ -321,7 +339,7 @@ export type SSEEventData =
   | { type: "plan"; data: PlanEvent }
   | { type: "step"; data: StepEvent }
   | { type: "tool"; data: ToolEvent }
-  | { type: "wait"; data: Record<string, unknown> }
+  | { type: "wait"; data: { reason?: "sandbox" | "user"; message?: string; queue_position?: number | null; queue_size?: number | null; [key: string]: unknown } }
   | { type: "done"; data: Record<string, unknown> }
   | { type: "error"; data: { error: string } };
 

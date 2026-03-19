@@ -15,7 +15,7 @@ class DBSandboxBindingRepository(SandboxBindingRepository):
         self.db_session = db_session
 
     async def save(self, binding: SandboxBinding) -> None:
-        stmt = select(SandboxBindingModel).where(SandboxBindingModel.user_id == binding.user_id)
+        stmt = select(SandboxBindingModel).where(SandboxBindingModel.session_id == binding.session_id)
         result = await self.db_session.execute(stmt)
         record = result.scalar_one_or_none()
         if not record:
@@ -23,11 +23,16 @@ class DBSandboxBindingRepository(SandboxBindingRepository):
             return
         record.update_from_domain(binding)
 
-    async def get_by_user_id(self, user_id: str) -> Optional[SandboxBinding]:
-        stmt = select(SandboxBindingModel).where(SandboxBindingModel.user_id == user_id)
+    async def get_by_session_id(self, session_id: str) -> Optional[SandboxBinding]:
+        stmt = select(SandboxBindingModel).where(SandboxBindingModel.session_id == session_id)
         result = await self.db_session.execute(stmt)
         record = result.scalar_one_or_none()
         return record.to_domain() if record else None
+
+    async def list_by_user_id(self, user_id: str) -> List[SandboxBinding]:
+        stmt = select(SandboxBindingModel).where(SandboxBindingModel.user_id == user_id)
+        result = await self.db_session.execute(stmt)
+        return [record.to_domain() for record in result.scalars().all()]
 
     async def get_by_sandbox_id(self, sandbox_id: str) -> Optional[SandboxBinding]:
         stmt = select(SandboxBindingModel).where(SandboxBindingModel.sandbox_id == sandbox_id)
@@ -39,6 +44,11 @@ class DBSandboxBindingRepository(SandboxBindingRepository):
         stmt = select(SandboxBindingModel)
         result = await self.db_session.execute(stmt)
         return [record.to_domain() for record in result.scalars().all()]
+
+    async def delete_by_session_id(self, session_id: str) -> None:
+        await self.db_session.execute(
+            delete(SandboxBindingModel).where(SandboxBindingModel.session_id == session_id)
+        )
 
     async def delete_by_user_id(self, user_id: str) -> None:
         await self.db_session.execute(

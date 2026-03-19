@@ -8,6 +8,7 @@ from app.domain.repositories.uow import IUnitOfWork
 from .db_file_repository import DBFileRepository
 from .db_sandbox_binding_repository import DBSandboxBindingRepository
 from .db_session_repository import DBSessionRepository
+from .db_system_config_repository import DBSystemConfigRepository
 from .db_user_config_repository import DBUserConfigRepository
 from .db_user_repository import DBUserRepository
 
@@ -41,6 +42,7 @@ class DBUnitOfWork(IUnitOfWork):
         self.user = DBUserRepository(db_session=self.db_session)
         self.user_config = DBUserConfigRepository(db_session=self.db_session)
         self.sandbox_binding = DBSandboxBindingRepository(db_session=self.db_session)
+        self.system_config = DBSystemConfigRepository(db_session=self.db_session)
 
         return self
 

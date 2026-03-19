@@ -72,6 +72,11 @@ async def stream_sessions(
                     latest_message_at=session.latest_message_at,
                     status=session.status,
                     unread_message_count=session.unread_message_count,
+                    waiting_reason=session.waiting_reason,
+                    sandbox_queue_position=session.sandbox_queue_position,
+                    sandbox_queue_size=session.sandbox_queue_size,
+                    sandbox_active=session.sandbox_active,
+                    sandbox_status_text=session.sandbox_status_text,
                 )
                 for session in sessions
             ]
@@ -107,6 +112,11 @@ async def get_all_sessions(
             latest_message_at=session.latest_message_at,
             status=session.status,
             unread_message_count=session.unread_message_count,
+            waiting_reason=session.waiting_reason,
+            sandbox_queue_position=session.sandbox_queue_position,
+            sandbox_queue_size=session.sandbox_queue_size,
+            sandbox_active=session.sandbox_active,
+            sandbox_status_text=session.sandbox_status_text,
         )
         for session in sessions
     ]
@@ -199,6 +209,11 @@ async def get_session(
             session_id=session.id,
             title=session.title,
             status=session.status,
+            waiting_reason=session.waiting_reason,
+            sandbox_queue_position=session.sandbox_queue_position,
+            sandbox_queue_size=session.sandbox_queue_size,
+            sandbox_active=session.sandbox_active,
+            sandbox_status_text=session.sandbox_status_text,
             events=EventMapper.events_to_sse_events(session.events),
         )
     )

@@ -9,15 +9,20 @@ from .base import Base
 
 
 class SandboxBindingModel(Base):
-    """用户沙箱绑定ORM模型"""
+    """会话级沙箱绑定ORM模型"""
 
     __tablename__ = "sandbox_bindings"
-    __table_args__ = (PrimaryKeyConstraint("user_id", name="pk_sandbox_bindings_user_id"),)
+    __table_args__ = (PrimaryKeyConstraint("session_id", name="pk_sandbox_bindings_session_id"),)
+
+    session_id: Mapped[str] = mapped_column(
+        ForeignKey("sessions.id", ondelete="CASCADE"),
+        nullable=False,
+        primary_key=True,
+    )
 
     user_id: Mapped[str] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        primary_key=True,
     )
     sandbox_id: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     sandbox_label: Mapped[str] = mapped_column(String(255), nullable=False)

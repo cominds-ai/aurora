@@ -6,6 +6,8 @@ import type {
   SandboxPreference,
   SandboxPreferenceStatus,
   SandboxOptionsData,
+  SandboxPoolItem,
+  SystemSandboxPoolData,
   MCPConfig,
   MCPServersData,
   A2AServersData,
@@ -68,6 +70,18 @@ export const configApi = {
 
   getSandboxes: (): Promise<SandboxOptionsData> => {
     return get<SandboxOptionsData>("/app-config/sandboxes");
+  },
+
+  getSystemSandboxPool: (): Promise<SystemSandboxPoolData> => {
+    return get<SystemSandboxPoolData>("/app-config/system/sandbox-pool");
+  },
+
+  updateSystemSandboxPool: (
+    sandboxPool: SandboxPoolItem[]
+  ): Promise<SystemSandboxPoolData> => {
+    return post<SystemSandboxPoolData>("/app-config/system/sandbox-pool", {
+      sandbox_pool: sandboxPool,
+    });
   },
 
   /**

@@ -21,6 +21,11 @@ class ListSessionItem(BaseModel):
     latest_message_at: Optional[datetime] = Field(default_factory=datetime.now)
     status: SessionStatus = SessionStatus.PENDING
     unread_message_count: int = 0
+    waiting_reason: Optional[str] = None
+    sandbox_queue_position: Optional[int] = None
+    sandbox_queue_size: int = 0
+    sandbox_active: bool = False
+    sandbox_status_text: str = ""
 
 
 class ListSessionResponse(BaseModel):
@@ -41,6 +46,11 @@ class GetSessionResponse(BaseModel):
     session_id: str
     title: Optional[str] = None
     status: SessionStatus
+    waiting_reason: Optional[str] = None
+    sandbox_queue_position: Optional[int] = None
+    sandbox_queue_size: int = 0
+    sandbox_active: bool = False
+    sandbox_status_text: str = ""
     events: List[AgentSSEEvent] = Field(default_factory=list)
 
 

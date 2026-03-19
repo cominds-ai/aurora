@@ -4,7 +4,7 @@ import type {ComponentProps} from 'react'
 import {useCallback, useEffect, useRef, useState} from 'react'
 import {useRouter} from 'next/navigation'
 import {toast} from 'sonner'
-import {LayoutGrid, LayoutList, Loader2, LogOut, Settings, Sparkles, Trash, Wrench} from 'lucide-react'
+import {LayoutGrid, LayoutList, Loader2, LogOut, Plus, Settings, Sparkles, Trash, Wrench} from 'lucide-react'
 import {
   Dialog,
   DialogClose,
@@ -28,11 +28,12 @@ import type {
   AgentConfig,
   LLMConfig,
   SearchConfig,
-  SandboxPreference,
+  SandboxOption,
+  SandboxPoolItem,
   ListMCPServerItem,
   ListA2AServerItem,
 } from '@/lib/api'
-import {clearAuthSession} from '@/lib/auth'
+import {clearAuthSession, getAuthSnapshot} from '@/lib/auth'
 import {cn} from '@/lib/utils'
 
 const CONFIGURED_SECRET_MASK = '••••••••••'
@@ -297,31 +298,132 @@ function SearchSetting({config, onChange}: SearchSettingProps) {
 }
 
 type SandboxSettingProps = {
-  config: SandboxPreference
-  onChange: (config: SandboxPreference) => void
+  pool: SandboxPoolItem[]
+  statuses: SandboxOption[]
+  statusMessage: string
+  isAdmin: boolean
+  onPoolChange: (pool: SandboxPoolItem[]) => void
 }
 
-function SandboxSetting({config, onChange}: SandboxSettingProps) {
+function SandboxSetting({pool, statuses, statusMessage, isAdmin, onPoolChange}: SandboxSettingProps) {
+  const [host, setHost] = useState('')
+  const [label, setLabel] = useState('')
+
+  const handleAdd = () => {
+    const trimmedHost = host.trim()
+    const trimmedLabel = label.trim()
+    if (!trimmedHost) {
+      toast.error('请输入 sandbox IP 或域名')
+      return
+    }
+    if (pool.some((item) => item.host === trimmedHost)) {
+      toast.error('该 sandbox 已在池中')
+      return
+    }
+    onPoolChange([...pool, {host: trimmedHost, label: trimmedLabel || null}])
+    setHost('')
+    setLabel('')
+  }
+
+  const handleDelete = (targetHost: string) => {
+    onPoolChange(pool.filter((item) => item.host !== targetHost))
+  }
+
   return (
     <form className="w-full px-1" onSubmit={(e) => e.preventDefault()}>
       <FieldGroup>
         <FieldSet>
-          <FieldLegend className="text-lg font-bold text-gray-700">专属沙箱</FieldLegend>
+          <FieldLegend className="text-lg font-bold text-gray-700">系统沙箱池</FieldLegend>
           <FieldGroup>
             <Field>
-              <FieldLabel htmlFor="preferred_sandbox_host">DSW 沙箱地址</FieldLabel>
-              <Input
-                id="preferred_sandbox_host"
-                type="text"
-                placeholder="10.x.x.x 或 dsw-sandbox.internal"
-                value={config.preferred_sandbox_host ?? ''}
-                onChange={(e) => onChange({...config, preferred_sandbox_host: e.target.value || null})}
-              />
+              <FieldLabel>当前状态</FieldLabel>
               <FieldDescription className="text-xs">
-                Aurora 会固定使用 `8080`、`9222`、`5901` 端口。
-                未配置该地址时，系统会提示“沙箱没有配置，沙箱不可用”，且不会再自动连接任何默认沙箱。
+                {statusMessage || 'Aurora 会从系统沙箱池中为每个会话独占分配一台 sandbox。'}
               </FieldDescription>
             </Field>
+            <div className="grid gap-3">
+              {statuses.length === 0 && (
+                <div className="rounded-2xl border border-dashed border-stone-200 bg-stone-50 px-4 py-5 text-sm text-stone-500">
+                  当前还没有配置任何 sandbox 实例。
+                </div>
+              )}
+              {statuses.map((item) => (
+                <div
+                  key={item.sandbox_id}
+                  className="rounded-2xl border border-stone-200 bg-white px-4 py-4 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-stone-900">{item.label || item.host}</div>
+                      <div className="mt-1 text-xs text-stone-500">{item.host}</div>
+                      {item.bound_user_id && (
+                        <div className="mt-2 text-xs text-stone-600">
+                          占用用户: {item.bound_user_id}，会话: {item.bound_session_id}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant={item.healthy ? 'secondary' : 'destructive'}>
+                        {item.healthy ? '健康' : '不可达'}
+                      </Badge>
+                      <Badge variant={item.available ? 'outline' : 'secondary'}>
+                        {item.available ? '空闲' : '占用中'}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {isAdmin && (
+              <>
+                <Field>
+                  <FieldLabel htmlFor="sandbox_pool_host">新增沙箱 IP / 域名</FieldLabel>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Input
+                      id="sandbox_pool_host"
+                      type="text"
+                      placeholder="10.x.x.x 或 dsw-sandbox.internal"
+                      value={host}
+                      onChange={(e) => setHost(e.target.value)}
+                    />
+                    <Input
+                      type="text"
+                      placeholder="可选标签，例如 DSW Sandbox 01"
+                      value={label}
+                      onChange={(e) => setLabel(e.target.value)}
+                    />
+                    <Button type="button" className="cursor-pointer" onClick={handleAdd}>
+                      <Plus className="size-4" />
+                      添加
+                    </Button>
+                  </div>
+                  <FieldDescription className="text-xs">
+                    Aurora 默认按 `8080`、`9222`、`5901` 端口连接池中的实例。
+                  </FieldDescription>
+                </Field>
+                <div className="grid gap-2">
+                  {pool.map((item) => (
+                    <div
+                      key={item.host}
+                      className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3"
+                    >
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-stone-900">{item.label || item.host}</div>
+                        <div className="text-xs text-stone-500">{item.host}</div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="cursor-pointer text-stone-500 hover:text-red-600"
+                        onClick={() => handleDelete(item.host)}
+                      >
+                        <Trash className="size-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </FieldGroup>
         </FieldSet>
       </FieldGroup>
@@ -685,7 +787,7 @@ const SETTING_MENUS: Array<{
   {key: 'common-setting', icon: Settings, title: '通用配置'},
   {key: 'llm-setting', icon: Sparkles, title: '模型提供商'},
   {key: 'search-setting', icon: Sparkles, title: 'Google 搜索'},
-  {key: 'sandbox-setting', icon: Sparkles, title: '专属沙箱'},
+  {key: 'sandbox-setting', icon: Sparkles, title: '沙箱池'},
   {key: 'a2a-setting', icon: LayoutGrid, title: 'A2A Agent 配置'},
   {key: 'mcp-setting', icon: Wrench, title: 'MCP 服务器'},
 ]
@@ -717,9 +819,12 @@ export function AuroraSettings({
   const [agentConfig, setAgentConfig] = useState<AgentConfig>({})
   const [llmConfig, setLlmConfig] = useState<LLMConfig>({})
   const [searchConfig, setSearchConfig] = useState<SearchConfig>({})
-  const [sandboxPreference, setSandboxPreference] = useState<SandboxPreference>({})
+  const [sandboxPool, setSandboxPool] = useState<SandboxPoolItem[]>([])
+  const [sandboxStatuses, setSandboxStatuses] = useState<SandboxOption[]>([])
+  const [sandboxStatusMessage, setSandboxStatusMessage] = useState('')
   const [mcpServers, setMcpServers] = useState<ListMCPServerItem[]>([])
   const [a2aServers, setA2aServers] = useState<ListA2AServerItem[]>([])
+  const [isSandboxPoolAdmin, setIsSandboxPoolAdmin] = useState(false)
 
   // ---- 状态 ----
   const [loadingConfig, setLoadingConfig] = useState(false)
@@ -737,19 +842,22 @@ export function AuroraSettings({
 
     // 1. Agent + LLM 配置（通常很快）
     setLoadingConfig(true)
+    const currentUser = getAuthSnapshot().user
+    const sandboxAdmin = currentUser?.username === 'fh'
+    setIsSandboxPoolAdmin(sandboxAdmin)
     Promise.all([
       configApi.getAgentConfig(),
       configApi.getLLMConfig(),
       configApi.getSearchConfig(),
       configApi.getSandboxPreferenceStatus(),
+      configApi.getSandboxes(),
     ])
-      .then(([agent, llm, search, sandboxStatus]) => {
+      .then(([agent, llm, search, sandboxStatus, sandboxes]) => {
         setAgentConfig(agent)
         setLlmConfig(llm)
         setSearchConfig(search)
-        setSandboxPreference({
-          preferred_sandbox_host: sandboxStatus.preferred_sandbox_host ?? null,
-        })
+        setSandboxStatusMessage(sandboxStatus.message ?? '')
+        setSandboxStatuses(sandboxes?.sandboxes ?? [])
       })
       .catch((err) => {
         console.error('[Settings] 获取基础配置失败:', err)
@@ -757,6 +865,19 @@ export function AuroraSettings({
       .finally(() => {
         setLoadingConfig(false)
       })
+
+    if (sandboxAdmin) {
+      configApi
+        .getSystemSandboxPool()
+        .then((data) => {
+          setSandboxPool(data?.sandbox_pool ?? [])
+        })
+        .catch((err) => {
+          console.error('[Settings] 获取沙箱池配置失败:', err)
+        })
+    } else {
+      setSandboxPool([])
+    }
 
     // 2. MCP 服务器列表（可能较慢）
     setLoadingMCP(true)
@@ -811,9 +932,15 @@ export function AuroraSettings({
         await configApi.updateSearchConfig(searchConfig)
         toast.success('Google 搜索配置保存成功')
       } else if (activeSetting === 'sandbox-setting') {
-        const updated = await configApi.updateSandboxPreference(sandboxPreference)
-        setSandboxPreference(updated)
-        toast.success('专属沙箱配置保存成功')
+        if (!isSandboxPoolAdmin) {
+          toast.error('当前账号无权修改沙箱池')
+          return
+        }
+        const updated = await configApi.updateSystemSandboxPool(sandboxPool)
+        setSandboxPool(updated.sandbox_pool ?? [])
+        const statuses = await configApi.getSandboxes()
+        setSandboxStatuses(statuses?.sandboxes ?? [])
+        toast.success('沙箱池配置保存成功')
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : '保存失败'
@@ -1005,8 +1132,11 @@ export function AuroraSettings({
                 )}
                 {activeSetting === 'sandbox-setting' && (
                   <SandboxSetting
-                    config={sandboxPreference}
-                    onChange={setSandboxPreference}
+                    pool={sandboxPool}
+                    statuses={sandboxStatuses}
+                    statusMessage={sandboxStatusMessage}
+                    isAdmin={isSandboxPoolAdmin}
+                    onPoolChange={setSandboxPool}
                   />
                 )}
               </>
@@ -1048,7 +1178,7 @@ export function AuroraSettings({
             </DialogClose>
             <Button
               className="cursor-pointer"
-              disabled={saving}
+              disabled={saving || (activeSetting === 'sandbox-setting' && !isSandboxPoolAdmin)}
               onClick={handleSave}
             >
               {saving && <Loader2 className="animate-spin"/>}

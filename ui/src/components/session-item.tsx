@@ -41,9 +41,14 @@ export function SessionItem({session, isActive, onClick, onDelete}: SessionItemP
     onDelete(session)
   }, [onDelete, session])
 
+  const queuePosition = session.sandbox_queue_position ?? null
+  const queueAheadCount = Math.max((queuePosition ?? 1) - 1, 0)
   const description = session.latest_message || '暂无消息'
   const dateLabel = formatRelativeDate(session.latest_message_at)
   const isRunning = session.status === 'running' || session.status === 'waiting'
+  const sandboxStatusText = session.waiting_reason === 'sandbox'
+    ? (queueAheadCount > 0 ? `排队中，前方 ${queueAheadCount} 个对话` : '排队中，当前队首')
+    : (session.sandbox_status_text || '未占用')
 
   return (
     <Item
@@ -69,10 +74,26 @@ export function SessionItem({session, isActive, onClick, onDelete}: SessionItemP
         <p className="text-xs text-muted-foreground truncate">
           {description}
         </p>
+        <p className="text-[11px] text-gray-400 truncate">
+          {sandboxStatusText}
+        </p>
       </ItemContent>
       {/* 右侧操作区 */}
       <ItemActions className="flex flex-col pt-0.5 gap-0 self-start">
         <ItemDescription className="text-xs whitespace-nowrap">{dateLabel}</ItemDescription>
+        {session.waiting_reason === 'sandbox' ? (
+          <span className="mt-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+            {queueAheadCount > 0 ? `排队中 前方${queueAheadCount}` : '排队中 队首'}
+          </span>
+        ) : session.sandbox_active ? (
+          <span className="mt-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-800">
+            沙箱占用中
+          </span>
+        ) : (
+          <span className="mt-1 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">
+            沙箱已释放
+          </span>
+        )}
         {mounted && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -101,5 +122,3 @@ export function SessionItem({session, isActive, onClick, onDelete}: SessionItemP
     </Item>
   )
 }
-
-

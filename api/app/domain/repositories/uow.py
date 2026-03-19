@@ -4,6 +4,7 @@ from typing import TypeVar
 from .file_repository import FileRepository
 from .sandbox_binding_repository import SandboxBindingRepository
 from .session_repository import SessionRepository
+from .system_config_repository import SystemConfigRepository
 from .user_config_repository import UserConfigRepository
 from .user_repository import UserRepository
 
@@ -17,6 +18,7 @@ class IUnitOfWork(ABC):
     user: UserRepository
     user_config: UserConfigRepository
     sandbox_binding: SandboxBindingRepository
+    system_config: SystemConfigRepository
 
     @abstractmethod
     async def commit(self):

@@ -65,6 +65,11 @@ export function SessionDetailView({ sessionId, initialMessage, initialAttachment
 
   const timeline = useMemo(() => eventsToTimeline(events), [events])
   const planSteps = useMemo(() => getLatestPlanFromEvents(events), [events])
+  const sandboxQueuePosition = session?.sandbox_queue_position ?? null
+  const sandboxQueueSize = session?.sandbox_queue_size ?? 0
+  const sandboxAheadCount = Math.max((sandboxQueuePosition ?? 1) - 1, 0)
+  const isSandboxWaiting = session?.waiting_reason === 'sandbox'
+  const isTaskActive = session?.status === 'running' || isSandboxWaiting
 
   const [fileListOpen, setFileListOpen] = useState(false)
   const [previewFile, setPreviewFile] = useState<AttachmentFile | null>(null)
@@ -285,10 +290,16 @@ export function SessionDetailView({ sessionId, initialMessage, initialAttachment
                   />
                 ))}
 
-                {(session?.status === 'running' || (hasInitialMessage && !initialMessageSentRef.current)) && (
+                {(isTaskActive || (hasInitialMessage && !initialMessageSentRef.current)) && (
                   <div className="flex items-center gap-2 text-sm text-gray-500 py-3">
                     <Loader2 className="size-4 animate-spin" />
-                    <span>正在思考中...</span>
+                    <span>
+                      {isSandboxWaiting
+                        ? (sandboxAheadCount > 0
+                          ? `正在排队等待沙箱，前方还有 ${sandboxAheadCount} 个对话`
+                          : '正在排队等待沙箱，即将为当前对话分配实例')
+                        : '正在思考中...'}
+                    </span>
                   </div>
                 )}
 
@@ -298,11 +309,21 @@ export function SessionDetailView({ sessionId, initialMessage, initialAttachment
 
             <div className="flex-shrink-0 bg-[#f8f8f7] py-4">
               <SandboxConnectionPrompt />
+              {isSandboxWaiting && (
+                <div className="mb-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                  <div className="font-medium">正在排队等待沙箱</div>
+                  <div className="mt-1 text-amber-800">
+                    {sandboxAheadCount > 0
+                      ? `前方还有 ${sandboxAheadCount} 个对话，当前共有 ${sandboxQueueSize} 个对话在等待沙箱。`
+                      : `当前对话已排到队首，前方无人等待。当前共有 ${sandboxQueueSize} 个对话在等待沙箱。`}
+                  </div>
+                </div>
+              )}
               <PlanPanel className="mb-2" steps={planSteps} />
               <ChatInput
                 onSend={handleSend}
                 sessionId={sessionId}
-                isRunning={session?.status === 'running'}
+                isRunning={isTaskActive}
                 onStop={handleStop}
               />
             </div>

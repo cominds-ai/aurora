@@ -57,13 +57,34 @@ export function useSessionDetail(
     }
     
     // 监听事件更新会话状态
+    if (evToAppend.type === 'message' || evToAppend.type === 'plan') {
+      setSession((prev) => prev ? {
+        ...prev,
+        status: 'running',
+        waiting_reason: null,
+        sandbox_queue_position: null,
+        sandbox_queue_size: 0,
+      } : null)
+    }
     if (evToAppend.type === 'step') {
       const stepData = evToAppend.data as { status?: string }
       if (stepData.status === 'running') {
-        setSession((prev) => prev ? { ...prev, status: 'running' } : null)
+        setSession((prev) => prev ? {
+          ...prev,
+          status: 'running',
+          waiting_reason: null,
+          sandbox_queue_position: null,
+          sandbox_queue_size: 0,
+        } : null)
       }
       if (stepData.status === 'waiting') {
-        setSession((prev) => prev ? { ...prev, status: 'waiting' } : null)
+        setSession((prev) => prev ? {
+          ...prev,
+          status: 'waiting',
+          waiting_reason: 'user',
+          sandbox_queue_position: null,
+          sandbox_queue_size: 0,
+        } : null)
         setStreaming(false)
       }
     }
@@ -72,25 +93,62 @@ export function useSessionDetail(
     if (evToAppend.type === 'tool') {
       const toolData = evToAppend.data as { function?: string; status?: string }
       if (toolData.function === 'message_ask_user' && toolData.status === 'calling') {
-        setSession((prev) => prev ? { ...prev, status: 'waiting' } : null)
+        setSession((prev) => prev ? {
+          ...prev,
+          status: 'waiting',
+          waiting_reason: 'user',
+          sandbox_queue_position: null,
+          sandbox_queue_size: 0,
+        } : null)
         setStreaming(false)
+      } else {
+        setSession((prev) => prev ? {
+          ...prev,
+          status: 'running',
+          waiting_reason: null,
+          sandbox_queue_position: null,
+          sandbox_queue_size: 0,
+        } : null)
       }
     }
 
     // wait 事件 → 等待用户输入
     if (evToAppend.type === 'wait') {
-      setSession((prev) => prev ? { ...prev, status: 'waiting' } : null)
+      const waitData = evToAppend.data as {
+        reason?: 'sandbox' | 'user'
+        queue_position?: number | null
+        queue_size?: number | null
+      }
+      setSession((prev) => prev ? {
+        ...prev,
+        status: 'waiting',
+        waiting_reason: waitData.reason ?? 'user',
+        sandbox_queue_position: waitData.reason === 'sandbox' ? (waitData.queue_position ?? null) : null,
+        sandbox_queue_size: waitData.reason === 'sandbox' ? (waitData.queue_size ?? 0) : 0,
+      } : null)
       setStreaming(false)
     }
     
     // done 事件时更新为 completed
     if (evToAppend.type === 'done') {
-      setSession((prev) => prev ? { ...prev, status: 'completed' } : null)
+      setSession((prev) => prev ? {
+        ...prev,
+        status: 'completed',
+        waiting_reason: null,
+        sandbox_queue_position: null,
+        sandbox_queue_size: 0,
+      } : null)
     }
     
     // error 事件时也可以认为任务结束
     if (evToAppend.type === 'error') {
-      setSession((prev) => prev ? { ...prev, status: 'completed' } : null)
+      setSession((prev) => prev ? {
+        ...prev,
+        status: 'completed',
+        waiting_reason: null,
+        sandbox_queue_position: null,
+        sandbox_queue_size: 0,
+      } : null)
     }
   }, [])
 
@@ -232,7 +290,13 @@ export function useSessionDetail(
       setStreaming(true)
       
       // 立即更新状态为 running，不等待 SSE 事件
-      setSession((prev) => prev ? { ...prev, status: 'running' } : null)
+      setSession((prev) => prev ? {
+        ...prev,
+        status: 'running',
+        waiting_reason: null,
+        sandbox_queue_position: null,
+        sandbox_queue_size: 0,
+      } : null)
       
       const onEvent = (ev: SSEEventData) => {
         appendEvent(ev)
@@ -273,7 +337,13 @@ export function useSessionDetail(
           setError(err instanceof Error ? err : new Error('流式响应异常'))
           setStreaming(false)
           isSendMessageRef.current = false
-          setSession((prev) => prev ? { ...prev, status: 'completed' } : null)
+          setSession((prev) => prev ? {
+            ...prev,
+            status: 'completed',
+            waiting_reason: null,
+            sandbox_queue_position: null,
+            sandbox_queue_size: 0,
+          } : null)
           if (messageStreamCleanupRef.current) {
             messageStreamCleanupRef.current()
             messageStreamCleanupRef.current = null

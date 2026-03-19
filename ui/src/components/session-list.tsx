@@ -17,6 +17,7 @@ export function SessionList() {
   const router = useRouter()
   const params = useParams()
   const {sessions, loading, error, refresh, deleteSession} = useSessions()
+  const queuedSessions = sessions.filter((session) => session.waiting_reason === 'sandbox')
 
   // 待删除的会话
   const [pendingDeleteSession, setPendingDeleteSession] = useState<Session | null>(null)
@@ -100,6 +101,11 @@ export function SessionList() {
 
   return (
     <>
+      {queuedSessions.length > 0 && (
+        <div className="mb-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          当前有 {queuedSessions.length} 个对话在排队等待沙箱
+        </div>
+      )}
       <ItemGroup className="gap-1">
         {sessions.map((session) => (
           <SessionItem
@@ -121,4 +127,3 @@ export function SessionList() {
     </>
   )
 }
-

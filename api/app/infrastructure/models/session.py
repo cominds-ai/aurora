@@ -91,7 +91,18 @@ class SessionModel(Base):
             # 1.基础字段: 使用BaseModel提供的python字典转换格式
             **session.model_dump(
                 mode="python",
-                exclude={"memories", "files", "events", "updated_at", "created_at"},
+                exclude={
+                    "memories",
+                    "files",
+                    "events",
+                    "updated_at",
+                    "created_at",
+                    "waiting_reason",
+                    "sandbox_queue_position",
+                    "sandbox_queue_size",
+                    "sandbox_active",
+                    "sandbox_status_text",
+                },
             ),
             # 2.复杂字段: 使用BaseModel提供的json字典转换格式
             **session.model_dump(
@@ -109,7 +120,18 @@ class SessionModel(Base):
         # 1.基础字段: Python模式
         base_data = session.model_dump(
             mode="python",
-            exclude={"memories", "files", "events", "updated_at", "created_at"},
+            exclude={
+                "memories",
+                "files",
+                "events",
+                "updated_at",
+                "created_at",
+                "waiting_reason",
+                "sandbox_queue_position",
+                "sandbox_queue_size",
+                "sandbox_active",
+                "sandbox_status_text",
+            },
         )
 
         # 2.复杂字段: JSON模式

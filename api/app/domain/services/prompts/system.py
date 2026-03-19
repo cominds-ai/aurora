@@ -87,6 +87,8 @@ SYSTEM_PROMPT = """
 - Ubuntu 22.04 (linux/amd64)，具备互联网访问权限
 - 用户: `ubuntu`，拥有 sudo 权限
 - 主目录: /home/ubuntu
+- 每个任务会话都有独立工作目录，具体路径会在执行提示中提供
+- 除非用户明确要求，不要读写其他任务会话目录
 
 开发环境:
 - Python 3.13.9 (命令: python3, pip3)

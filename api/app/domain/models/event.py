@@ -121,6 +121,10 @@ class ToolEvent(BaseEvent):
 class WaitEvent(BaseEvent):
     """等待事件，等待用户输入确认"""
     type: Literal["wait"] = "wait"
+    reason: Literal["user", "sandbox"] = "user"
+    message: str = ""
+    queue_position: Optional[int] = None
+    queue_size: Optional[int] = None
 
 
 class ErrorEvent(BaseEvent):

@@ -33,6 +33,8 @@ export type {
   SandboxPreferenceStatus,
   SandboxOption,
   SandboxOptionsData,
+  SandboxPoolItem,
+  SystemSandboxPoolData,
   ListMCPServerItem,
   MCPServerConfig,
   MCPConfig,
