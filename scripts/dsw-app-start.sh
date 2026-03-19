@@ -119,6 +119,9 @@ if ! wait_for_http "http://127.0.0.1:${API_PORT}/api/status" "api" 60; then
 fi
 
 cd "$ROOT_DIR/ui"
+if [ ! -x "$ROOT_DIR/ui/node_modules/.bin/next" ]; then
+  npm install --include=optional >"$LOG_DIR/ui-install.log" 2>&1
+fi
 NEXT_PUBLIC_API_BASE_URL="$NEXT_PUBLIC_API_BASE_URL" npm run build >"$UI_BUILD_LOG" 2>&1
 nohup env NEXT_PUBLIC_API_BASE_URL="$NEXT_PUBLIC_API_BASE_URL" npm run start -- --hostname 0.0.0.0 --port 3000 >"$UI_LOG" 2>&1 &
 echo $! >"$UI_PID_FILE"
@@ -132,6 +135,7 @@ fi
 cat <<EOF
 [aurora] DSW app stack started
 [aurora] api log: $API_LOG
+[aurora] ui install log: $LOG_DIR/ui-install.log
 [aurora] ui build log: $UI_BUILD_LOG
 [aurora] ui log: $UI_LOG
 [aurora] ui port: $UI_PORT
