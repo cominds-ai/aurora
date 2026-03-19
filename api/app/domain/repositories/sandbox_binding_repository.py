@@ -9,6 +9,9 @@ class SandboxBindingRepository(Protocol):
     async def save(self, binding: SandboxBinding) -> None:
         ...
 
+    async def get_by_user_id(self, user_id: str) -> Optional[SandboxBinding]:
+        ...
+
     async def get_by_session_id(self, session_id: str) -> Optional[SandboxBinding]:
         ...
 

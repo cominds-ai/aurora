@@ -5,10 +5,10 @@ from datetime import datetime, timedelta, timezone
 
 import jwt
 
-from app.application.errors.exceptions import NotFoundError
+from app.application.errors.exceptions import NotFoundError, BadRequestError
 from app.domain.models.auth import AuthToken, AuthUser, LoginResult
 from app.domain.models.user import User
-from app.domain.repositories.uow import IUnitOfWork
+from .sandbox_service import SandboxService
 from core.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -17,8 +17,9 @@ logger = logging.getLogger(__name__)
 class AuthService:
     """账号认证服务"""
 
-    def __init__(self, uow_factory: callable) -> None:
+    def __init__(self, uow_factory: callable, sandbox_service: SandboxService) -> None:
         self._uow_factory = uow_factory
+        self._sandbox_service = sandbox_service
         self._settings = get_settings()
 
     def _hash_password(self, password: str) -> str:
@@ -50,6 +51,11 @@ class AuthService:
 
             if not self._verify_password(password, user.password_hash):
                 raise NotFoundError("用户名或密码错误")
+
+        try:
+            await self._sandbox_service.ensure_user_sandbox(user.id)
+        except BadRequestError as exc:
+            logger.info("用户[%s]登录时未能分配沙箱，允许继续登录: %s", user.username, exc.msg)
 
         token = AuthToken(access_token=self._build_token(user))
         return LoginResult(

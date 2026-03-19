@@ -2,11 +2,13 @@ import asyncio
 import io
 import logging
 import uuid
-from typing import List, AsyncGenerator, Callable, BinaryIO
+from typing import List, AsyncGenerator, Callable, BinaryIO, Optional
 
 from fastapi import UploadFile
 from pydantic import TypeAdapter
 
+from app.application.errors.exceptions import AppException
+from app.application.services.sandbox_service import SandboxService
 from app.domain.external.browser import Browser
 from app.domain.external.file_storage import FileStorage
 from app.domain.external.json_parser import JSONParser
@@ -27,9 +29,176 @@ from app.domain.repositories.uow import IUnitOfWork
 from app.domain.services.flows.planner_react import PlannerReActFlow
 from app.domain.services.tools.a2a import A2ATool
 from app.domain.services.tools.mcp import MCPTool
-from app.application.services.sandbox_service import SandboxService
+from app.domain.models.app_config import SandboxPreference
 
 logger = logging.getLogger(__name__)
+
+
+class LazySandboxProxy:
+    """按需初始化的沙箱代理，首次调用时才真正分配用户沙箱"""
+
+    def __init__(self, owner: "AgentTaskRunner") -> None:
+        self._owner = owner
+
+    async def exec_command(self, session_id: str, exec_dir: str, command: str) -> ToolResult:
+        return await (await self._owner._acquire_sandbox()).exec_command(session_id, exec_dir, command)
+
+    async def read_shell_output(self, session_id: str, console: bool = False) -> ToolResult:
+        return await (await self._owner._acquire_sandbox()).read_shell_output(session_id, console)
+
+    async def wait_process(self, session_id: str, seconds: Optional[int] = None) -> ToolResult:
+        return await (await self._owner._acquire_sandbox()).wait_process(session_id, seconds)
+
+    async def write_shell_input(self, session_id: str, input_text: str, press_enter: bool = True) -> ToolResult:
+        return await (await self._owner._acquire_sandbox()).write_shell_input(session_id, input_text, press_enter)
+
+    async def kill_process(self, session_id: str) -> ToolResult:
+        return await (await self._owner._acquire_sandbox()).kill_process(session_id)
+
+    async def write_file(
+            self,
+            filepath: str,
+            content: str,
+            append: bool = False,
+            leading_newline: bool = False,
+            trailing_newline: bool = False,
+            sudo: bool = False,
+    ) -> ToolResult:
+        return await (await self._owner._acquire_sandbox()).write_file(
+            filepath=filepath,
+            content=content,
+            append=append,
+            leading_newline=leading_newline,
+            trailing_newline=trailing_newline,
+            sudo=sudo,
+        )
+
+    async def read_file(
+            self,
+            filepath: str,
+            start_line: Optional[int] = None,
+            end_line: Optional[int] = None,
+            sudo: bool = False,
+            max_length: int = 10000,
+    ) -> ToolResult:
+        return await (await self._owner._acquire_sandbox()).read_file(
+            filepath=filepath,
+            start_line=start_line,
+            end_line=end_line,
+            sudo=sudo,
+            max_length=max_length,
+        )
+
+    async def check_file_exists(self, filepath: str) -> ToolResult:
+        return await (await self._owner._acquire_sandbox()).check_file_exists(filepath)
+
+    async def delete_file(self, filepath: str) -> ToolResult:
+        return await (await self._owner._acquire_sandbox()).delete_file(filepath)
+
+    async def list_files(self, dir_path: str) -> ToolResult:
+        return await (await self._owner._acquire_sandbox()).list_files(dir_path)
+
+    async def replace_in_file(self, filepath: str, old_str: str, new_str: str, sudo: bool = False) -> ToolResult:
+        return await (await self._owner._acquire_sandbox()).replace_in_file(filepath, old_str, new_str, sudo)
+
+    async def search_in_file(self, filepath: str, regex: str, sudo: bool = False) -> ToolResult:
+        return await (await self._owner._acquire_sandbox()).search_in_file(filepath, regex, sudo)
+
+    async def find_files(self, dir_path: str, glob_pattern: str) -> ToolResult:
+        return await (await self._owner._acquire_sandbox()).find_files(dir_path, glob_pattern)
+
+    async def upload_file(self, file_data: BinaryIO, filepath: str, filename: str = None) -> ToolResult:
+        return await (await self._owner._acquire_sandbox()).upload_file(file_data, filepath, filename)
+
+    async def download_file(self, filepath: str) -> BinaryIO:
+        return await (await self._owner._acquire_sandbox()).download_file(filepath)
+
+    async def ensure_sandbox(self) -> None:
+        await (await self._owner._acquire_sandbox()).ensure_sandbox()
+
+    async def destroy(self) -> bool:
+        sandbox = self._owner._sandbox
+        if sandbox is None:
+            return True
+        return await sandbox.destroy()
+
+    async def get_browser(self) -> Browser:
+        return await self._owner._acquire_browser()
+
+    @property
+    def id(self) -> str:
+        sandbox = self._owner._sandbox
+        return sandbox.id if sandbox else ""
+
+    @property
+    def cdp_url(self) -> str:
+        sandbox = self._owner._sandbox
+        return sandbox.cdp_url if sandbox else ""
+
+    @property
+    def vnc_url(self) -> str:
+        sandbox = self._owner._sandbox
+        return sandbox.vnc_url if sandbox else ""
+
+
+class LazyBrowserProxy:
+    """按需初始化的浏览器代理，首次浏览器操作时才申请沙箱浏览器"""
+
+    def __init__(self, owner: "AgentTaskRunner") -> None:
+        self._owner = owner
+
+    async def view_page(self) -> ToolResult:
+        return await (await self._owner._acquire_browser()).view_page()
+
+    async def navigate(self, url: str) -> ToolResult:
+        return await (await self._owner._acquire_browser()).navigate(url)
+
+    async def restart(self, url: str) -> ToolResult:
+        return await (await self._owner._acquire_browser()).restart(url)
+
+    async def click(self, index: Optional[int] = None, coordinate_x: Optional[float] = None,
+                    coordinate_y: Optional[float] = None) -> ToolResult:
+        return await (await self._owner._acquire_browser()).click(index, coordinate_x, coordinate_y)
+
+    async def input(
+            self,
+            text: str,
+            press_enter: bool,
+            index: Optional[int] = None,
+            coordinate_x: Optional[float] = None,
+            coordinate_y: Optional[float] = None,
+    ) -> ToolResult:
+        return await (await self._owner._acquire_browser()).input(
+            text,
+            press_enter,
+            index,
+            coordinate_x,
+            coordinate_y,
+        )
+
+    async def move_mouse(self, coordinate_x: float, coordinate_y: float) -> ToolResult:
+        return await (await self._owner._acquire_browser()).move_mouse(coordinate_x, coordinate_y)
+
+    async def press_key(self, key: str) -> ToolResult:
+        return await (await self._owner._acquire_browser()).press_key(key)
+
+    async def select_option(self, index: int, option: int) -> ToolResult:
+        return await (await self._owner._acquire_browser()).select_option(index, option)
+
+    async def scroll_up(self, to_top: Optional[bool] = None) -> ToolResult:
+        return await (await self._owner._acquire_browser()).scroll_up(to_top)
+
+    async def scroll_down(self, to_down: Optional[bool] = None) -> ToolResult:
+        return await (await self._owner._acquire_browser()).scroll_down(to_down)
+
+    async def screenshot(self, full_page: Optional[bool] = None) -> bytes:
+        return await (await self._owner._acquire_browser()).screenshot(full_page)
+
+    async def console_exec(self, javascript: str) -> ToolResult:
+        return await (await self._owner._acquire_browser()).console_exec(javascript)
+
+    async def console_view(self, max_lines: Optional[int] = None) -> ToolResult:
+        return await (await self._owner._acquire_browser()).console_view(max_lines)
 
 
 class AgentTaskRunner(TaskRunner):
@@ -43,37 +212,82 @@ class AgentTaskRunner(TaskRunner):
             mcp_config: MCPConfig,  # mcp配置
             a2a_config: A2AConfig,  # a2a配置
             session_id: str,  # 会话id
+            user_id: str,  # 用户id
+            sandbox_preference: SandboxPreference,  # 沙箱偏好
             file_storage: FileStorage,  # 文件存储桶
             json_parser: JSONParser,  # json解析器
-            browser: Browser,  # 浏览器
             search_engine: SearchEngine,  # 搜索引擎
-            sandbox: Sandbox,  # 沙箱
             sandbox_service: SandboxService,  # 沙箱服务
     ) -> None:
         """构造函数，完成Agent任务运行器的创建"""
         self._uow_factory = uow_factory
         self._uow = uow_factory()
         self._session_id = session_id
-        self._sandbox = sandbox
+        self._user_id = user_id
+        self._sandbox_preference = sandbox_preference
         self._sandbox_service = sandbox_service
+        self._sandbox: Optional[Sandbox] = None
+        self._browser: Optional[Browser] = None
+        self._sandbox_lock = asyncio.Lock()
+        sandbox_proxy = LazySandboxProxy(self)
+        browser_proxy = LazyBrowserProxy(self)
         self._mcp_config = mcp_config
         self._mcp_tool = MCPTool()
         self._a2a_config = a2a_config
         self._a2a_tool = A2ATool()
         self._file_storage = file_storage
-        self._browser = browser
         self._flow = PlannerReActFlow(
             uow_factory=uow_factory,
             llm=llm,
             agent_config=agent_config,
             session_id=session_id,
             json_parser=json_parser,
-            browser=browser,
-            sandbox=sandbox,
+            browser=browser_proxy,
+            sandbox=sandbox_proxy,
             search_engine=search_engine,
             mcp_tool=self._mcp_tool,
             a2a_tool=self._a2a_tool,
         )
+
+    async def _acquire_sandbox(self) -> Sandbox:
+        if self._sandbox is not None:
+            return self._sandbox
+
+        async with self._sandbox_lock:
+            if self._sandbox is not None:
+                return self._sandbox
+
+            sandbox = await self._sandbox_service.get_session_sandbox(
+                user_id=self._user_id,
+                session_id=self._session_id,
+                sandbox_preference=self._sandbox_preference,
+            )
+            await sandbox.ensure_sandbox()
+            self._sandbox = sandbox
+
+            async with self._uow_factory() as uow:
+                session = await uow.session.get_by_id(self._session_id)
+                if session is not None:
+                    session.sandbox_id = sandbox.id
+                    await uow.session.save(session)
+
+            await self._sync_existing_session_files_to_sandbox()
+            return sandbox
+
+    async def _acquire_browser(self) -> Browser:
+        if self._browser is not None:
+            return self._browser
+
+        sandbox = await self._acquire_sandbox()
+
+        async with self._sandbox_lock:
+            if self._browser is not None:
+                return self._browser
+            browser = await sandbox.get_browser()
+            if not browser:
+                raise RuntimeError(f"获取沙箱[{sandbox.id}]中的浏览器实例失败")
+            self._browser = browser
+            return browser
 
     async def _put_and_add_event(self, task: Task, event: Event) -> None:
         """往指定任务的消息队列中添加事件"""
@@ -122,8 +336,41 @@ class AgentTaskRunner(TaskRunner):
                 async with self._uow:
                     await self._uow.file.save(file)  # 可以更新也可以不更新
                 return file
+        except AppException:
+            raise
         except Exception as e:
             logger.exception(f"AgentTaskRunner同步文件[{file_id}]失败: {str(e)}")
+
+    async def _sync_existing_session_files_to_sandbox(self) -> None:
+        """确保当前会话历史文件在本轮执行前可被继续访问"""
+        try:
+            async with self._uow_factory() as uow:
+                session = await uow.session.get_by_id(self._session_id)
+            if session is None or not session.files:
+                return
+
+            for file in session.files:
+                if not file.filepath:
+                    continue
+                exists_result = await self._sandbox.check_file_exists(file.filepath)
+                if exists_result.success and bool((exists_result.data or {}).get("exists")):
+                    continue
+
+                try:
+                    file_data, latest_file = await self._file_storage.download_file(file.id)
+                    tool_result = await self._sandbox.upload_file(
+                        file_data=file_data,
+                        filepath=file.filepath,
+                        filename=latest_file.filename or file.filename,
+                    )
+                    if tool_result.success:
+                        continue
+                    logger.warning("会话[%s]历史文件重新同步失败: %s", self._session_id, file.filepath)
+                except Exception as exc:
+                    logger.warning("会话[%s]历史文件重新同步异常, filepath=%s, error=%s",
+                                   self._session_id, file.filepath, exc)
+        except Exception as e:
+            logger.warning("会话[%s]历史文件预同步失败: %s", self._session_id, e)
 
     async def _sync_message_attachments_to_sandbox(self, event: MessageEvent) -> None:
         """将消息事件中的附件同步到沙箱中"""
@@ -146,6 +393,8 @@ class AgentTaskRunner(TaskRunner):
 
             # 6.更新消息事件中的attachments
             event.attachments = attachments
+        except AppException:
+            raise
         except Exception as e:
             logger.exception(f"AgentTaskRunner同步消息附件到沙箱失败: {str(e)}")
 
@@ -349,7 +598,6 @@ class AgentTaskRunner(TaskRunner):
         try:
             # 1.确保沙箱、mcp、a2a均初始化完成
             logger.info(f"AgentTaskRunner任务处理开始")
-            await self._sandbox.ensure_sandbox()
             await self._mcp_tool.initialize(self._mcp_config)
             await self._a2a_tool.initialize(self._a2a_config)
 
@@ -434,7 +682,8 @@ class AgentTaskRunner(TaskRunner):
         except Exception as e:
             # 14.记录日志并往任务队列/消息队列中写入异常事件并更新会话状态
             logger.exception(f"AgentTaskRunner运行出错: {str(e)}")
-            await self._put_and_add_event(task, ErrorEvent(error=f"AgentTaskRunner出错: {str(e)}"))
+            error_message = e.msg if isinstance(e, AppException) else f"AgentTaskRunner出错: {str(e)}"
+            await self._put_and_add_event(task, ErrorEvent(error=error_message))
             async with self._uow:
                 await self._uow.session.update_status(self._session_id, SessionStatus.COMPLETED)
         finally:
@@ -465,15 +714,9 @@ class AgentTaskRunner(TaskRunner):
             logger.warning(f"关闭会话[{self._session_id}]沙箱客户端失败: {e}")
 
         try:
-            await self._sandbox_service.release_session_binding(self._session_id)
-        except Exception as e:
-            logger.warning(f"释放会话[{self._session_id}]沙箱绑定失败: {e}")
-
-        try:
             async with self._uow_factory() as uow:
                 session = await uow.session.get_by_id(self._session_id)
                 if session is not None:
-                    session.sandbox_id = None
                     session.task_id = None
                     await uow.session.save(session)
         except Exception as e:

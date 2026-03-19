@@ -15,13 +15,19 @@ class DBSandboxBindingRepository(SandboxBindingRepository):
         self.db_session = db_session
 
     async def save(self, binding: SandboxBinding) -> None:
-        stmt = select(SandboxBindingModel).where(SandboxBindingModel.session_id == binding.session_id)
+        stmt = select(SandboxBindingModel).where(SandboxBindingModel.user_id == binding.user_id)
         result = await self.db_session.execute(stmt)
         record = result.scalar_one_or_none()
         if not record:
             self.db_session.add(SandboxBindingModel.from_domain(binding))
             return
         record.update_from_domain(binding)
+
+    async def get_by_user_id(self, user_id: str) -> Optional[SandboxBinding]:
+        stmt = select(SandboxBindingModel).where(SandboxBindingModel.user_id == user_id)
+        result = await self.db_session.execute(stmt)
+        record = result.scalar_one_or_none()
+        return record.to_domain() if record else None
 
     async def get_by_session_id(self, session_id: str) -> Optional[SandboxBinding]:
         stmt = select(SandboxBindingModel).where(SandboxBindingModel.session_id == session_id)

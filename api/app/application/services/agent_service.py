@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from datetime import datetime
-from typing import AsyncGenerator, Optional, List, Type, Callable, Awaitable
+from typing import AsyncGenerator, Optional, List, Type, Callable
 
 from pydantic import TypeAdapter
 
@@ -16,7 +16,8 @@ from app.domain.repositories.uow import IUnitOfWork
 from app.domain.services.agent_task_runner import AgentTaskRunner
 from app.infrastructure.external.llm.openai_llm import OpenAILLM
 from app.infrastructure.external.search.serpapi_google_search import SerpAPIGoogleSearchEngine
-from .sandbox_service import SandboxService, SandboxQueueStatus
+from .sandbox_service import SandboxService
+from app.domain.models.app_config import SandboxPreference
 
 logger = logging.getLogger(__name__)
 
@@ -56,26 +57,10 @@ class AgentService:
     async def _create_task(
             self,
             session: Session,
-            on_queue_update: Optional[Callable[[SandboxQueueStatus], Awaitable[None]]] = None,
     ) -> Task:
         """根据传递的会话创建一个新任务"""
         async with self._uow_factory() as uow:
             app_config = await uow.user_config.load(self._current_user.id)
-
-        sandbox = await self._sandbox_service.get_session_sandbox(
-            user_id=self._current_user.id,
-            session_id=session.id,
-            sandbox_preference=app_config.sandbox_preference,
-            on_queue_update=on_queue_update,
-        )
-        session.sandbox_id = sandbox.id
-        async with self._uow:
-            await self._uow.session.save(session)
-
-        browser = await sandbox.get_browser()
-        if not browser:
-            logger.error(f"获取沙箱[{sandbox.id}]中的浏览器实例失败")
-            raise RuntimeError(f"获取沙箱[{sandbox.id}]中的浏览器实例失败")
 
         # 5.创建AgentTaskRunner
         task_runner = AgentTaskRunner(
@@ -85,14 +70,14 @@ class AgentService:
             mcp_config=app_config.mcp_config,
             a2a_config=app_config.a2a_config,
             session_id=session.id,
+            user_id=self._current_user.id,
+            sandbox_preference=app_config.sandbox_preference,
             file_storage=self._file_storage,
             json_parser=self._json_parser,
-            browser=browser,
             search_engine=SerpAPIGoogleSearchEngine(
                 search_config=app_config.search_config,
                 max_results=app_config.agent_config.max_search_results,
             ),
-            sandbox=sandbox,
             sandbox_service=self._sandbox_service,
         )
 
@@ -103,20 +88,6 @@ class AgentService:
             await self._uow.session.save(session)
 
         return task
-
-    @staticmethod
-    def _build_sandbox_wait_event(queue_status: SandboxQueueStatus) -> WaitEvent:
-        ahead_count = max(queue_status.position - 1, 0)
-        if ahead_count > 0:
-            message = f"当前沙箱资源繁忙，正在排队等待，前方还有 {ahead_count} 个对话。"
-        else:
-            message = "当前沙箱资源繁忙，正在排队等待，你已排到队首。"
-        return WaitEvent(
-            reason="sandbox",
-            message=message,
-            queue_position=queue_status.position,
-            queue_size=queue_status.size,
-        )
 
     async def _safe_update_unread_count(self, session_id: str) -> None:
         """在独立的后台任务中安全地更新未读消息计数
@@ -157,30 +128,10 @@ class AgentService:
                 # 4.判断会话的状态是什么,如果不是运行中则表示已完成或者空闲中
                 if session.status != SessionStatus.RUNNING or task is None:
                     # 5.不在运行中需要创建一个新的task并启动
-                    queue_updates: asyncio.Queue[WaitEvent] = asyncio.Queue()
-
-                    async def on_queue_update(queue_status: SandboxQueueStatus) -> None:
-                        await queue_updates.put(self._build_sandbox_wait_event(queue_status))
-                    create_task_future = asyncio.create_task(self._create_task(session, on_queue_update))
-                    try:
-                        while True:
-                            if create_task_future.done() and queue_updates.empty():
-                                break
-                            try:
-                                wait_event = await asyncio.wait_for(queue_updates.get(), timeout=0.2)
-                                yield wait_event
-                            except asyncio.TimeoutError:
-                                continue
-
-                        task = await create_task_future
-                    except BaseException:
-                        if not create_task_future.done():
-                            create_task_future.cancel()
-                            try:
-                                await create_task_future
-                            except asyncio.CancelledError:
-                                pass
-                        raise
+                    async with self._uow:
+                        await self._uow.session.update_status(session_id, SessionStatus.RUNNING)
+                    session.status = SessionStatus.RUNNING
+                    task = await self._create_task(session)
                     if not task:
                         logger.error(f"会话[{session_id}]创建任务失败")
                         raise RuntimeError(f"会话[{session_id}]创建任务失败")

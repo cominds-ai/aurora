@@ -43,62 +43,33 @@ class SessionService:
         return session
 
     async def _attach_queue_state(self, session: Session) -> Session:
-        queue_status = await self._sandbox_service.get_queue_status(session.id)
-        binding = await self._sandbox_service.get_binding(session.id)
+        binding = await self._sandbox_service.get_user_binding(self._current_user.id)
         session.waiting_reason = None
         session.sandbox_queue_position = None
         session.sandbox_queue_size = 0
         session.sandbox_active = binding is not None
-        session.sandbox_status_text = "未占用"
-
-        if queue_status is not None:
-            session.status = SessionStatus.WAITING
-            session.waiting_reason = "sandbox"
-            session.sandbox_queue_position = queue_status.position
-            session.sandbox_queue_size = queue_status.size
-            if queue_status.position > 1:
-                session.sandbox_status_text = f"排队中，前方 {queue_status.position - 1} 个对话"
-            else:
-                session.sandbox_status_text = "排队中，当前队首"
-            return session
+        session.sandbox_status_text = "专属沙箱未分配"
 
         if binding is not None:
-            session.sandbox_status_text = "沙箱占用中"
+            session.sandbox_status_text = "专属沙箱已分配"
             return session
 
-        if session.status == SessionStatus.WAITING:
-            session.waiting_reason = "user"
-            session.sandbox_status_text = "沙箱已释放"
-        elif session.status == SessionStatus.COMPLETED:
-            session.sandbox_status_text = "沙箱已释放"
+        if session.status in [SessionStatus.WAITING, SessionStatus.COMPLETED]:
+            session.sandbox_status_text = "专属沙箱已释放"
         return session
 
     async def _attach_queue_states(self, sessions: List[Session]) -> List[Session]:
-        queue_statuses = await self._sandbox_service.list_queue_statuses()
+        binding = await self._sandbox_service.get_user_binding(self._current_user.id)
         for session in sessions:
-            binding = await self._sandbox_service.get_binding(session.id)
-            queue_status = queue_statuses.get(session.id)
             session.waiting_reason = None
             session.sandbox_queue_position = None
             session.sandbox_queue_size = 0
             session.sandbox_active = binding is not None
-            session.sandbox_status_text = "未占用"
-            if queue_status is not None:
-                session.status = SessionStatus.WAITING
-                session.waiting_reason = "sandbox"
-                session.sandbox_queue_position = queue_status.position
-                session.sandbox_queue_size = queue_status.size
-                if queue_status.position > 1:
-                    session.sandbox_status_text = f"排队中，前方 {queue_status.position - 1} 个对话"
-                else:
-                    session.sandbox_status_text = "排队中，当前队首"
-            elif binding is not None:
-                session.sandbox_status_text = "沙箱占用中"
-            elif session.status == SessionStatus.WAITING:
-                session.waiting_reason = "user"
-                session.sandbox_status_text = "沙箱已释放"
-            elif session.status == SessionStatus.COMPLETED:
-                session.sandbox_status_text = "沙箱已释放"
+            session.sandbox_status_text = "专属沙箱未分配"
+            if binding is not None:
+                session.sandbox_status_text = "专属沙箱已分配"
+            elif session.status in [SessionStatus.WAITING, SessionStatus.COMPLETED]:
+                session.sandbox_status_text = "专属沙箱已释放"
         return sessions
 
     async def get_all_sessions(self) -> List[Session]:
@@ -124,7 +95,7 @@ class SessionService:
             raise NotFoundError(f"会话[{session_id}]不存在, 删除失败")
 
         # 2.根据传递的会话id删除会话
-        await self._sandbox_service.release_session_binding(session_id)
+        await self._sandbox_service.cleanup_session_workspace(self._current_user.id, session_id)
         async with self._uow:
             await self._uow.session.delete_by_id(session_id)
         logger.info(f"删除会话[{session_id}]成功")
@@ -155,9 +126,7 @@ class SessionService:
         if not session or session.user_id != self._current_user.id:
             raise RuntimeError(f"当前会话不存在[{session_id}], 请核实后重试")
 
-        # 2.根据沙箱id获取沙箱并判断是否存在
-        if not session.sandbox_id:
-            raise NotFoundError("当前会话无沙箱环境")
+        # 2.根据用户专属沙箱获取沙箱并判断是否存在
         sandbox_preference = await self._get_sandbox_preference()
         sandbox = await self._sandbox_service.get_session_sandbox(
             self._current_user.id,
@@ -183,9 +152,7 @@ class SessionService:
         if not session or session.user_id != self._current_user.id:
             raise RuntimeError(f"当前会话不存在[{session_id}], 请核实后重试")
 
-        # 2.根据沙箱id获取沙箱并判断是否存在
-        if not session.sandbox_id:
-            raise NotFoundError("当前会话无沙箱环境")
+        # 2.根据用户专属沙箱获取沙箱并判断是否存在
         sandbox_preference = await self._get_sandbox_preference()
         sandbox = await self._sandbox_service.get_session_sandbox(
             self._current_user.id,
@@ -211,9 +178,7 @@ class SessionService:
         if not session or session.user_id != self._current_user.id:
             raise RuntimeError(f"当前会话不存在[{session_id}], 请核实后重试")
 
-        # 2.根据沙箱id获取沙箱并判断是否存在
-        if not session.sandbox_id:
-            raise NotFoundError("当前会话无沙箱环境")
+        # 2.根据用户专属沙箱获取沙箱并判断是否存在
         sandbox_preference = await self._get_sandbox_preference()
         sandbox = await self._sandbox_service.get_session_sandbox(
             self._current_user.id,

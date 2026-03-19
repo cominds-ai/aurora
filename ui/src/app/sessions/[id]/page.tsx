@@ -8,6 +8,16 @@ interface PageProps {
   params: Promise<{ id: string }>
 }
 
+function decodeInitPayload(value: string): string {
+  const normalized = value
+    .replace(/-/g, '+')
+    .replace(/_/g, '/')
+    .padEnd(Math.ceil(value.length / 4) * 4, '=')
+  const binary = atob(normalized)
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
+  return new TextDecoder().decode(bytes)
+}
+
 /**
  * 任务详情页：展示会话标题、事件时间线、任务进度与输入框。
  * - 通过 getSessionDetail 获取任务详情与事件列表（若后端返回 events）
@@ -31,8 +41,7 @@ export default function SessionDetailPage({ params }: PageProps) {
       
       if (initParam) {
         try {
-          // 解码 Base64
-          const decoded = decodeURIComponent(atob(initParam))
+          const decoded = decodeInitPayload(initParam)
           const { message, attachments } = JSON.parse(decoded)
           
           // 一次性设置所有状态

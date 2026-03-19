@@ -5,9 +5,9 @@ from pydantic import BaseModel, Field
 
 
 class SandboxBinding(BaseModel):
-    """会话级沙箱绑定"""
+    """用户级沙箱绑定"""
 
-    session_id: str
+    session_id: Optional[str] = None
     user_id: str
     sandbox_id: str
     sandbox_label: str

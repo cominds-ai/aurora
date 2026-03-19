@@ -30,7 +30,10 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def get_auth_service() -> AuthService:
-    return AuthService(uow_factory=get_uow)
+    return AuthService(
+        uow_factory=get_uow,
+        sandbox_service=SandboxService(uow_factory=get_uow),
+    )
 
 
 async def get_current_user(

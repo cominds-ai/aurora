@@ -5,7 +5,7 @@ import {AlertTriangle} from 'lucide-react'
 import {configApi} from '@/lib/api'
 import {getAuthSnapshot} from '@/lib/auth'
 
-const SANDBOX_PROMPT_MESSAGE = '当前系统还未配置可用的沙箱池'
+const SANDBOX_PROMPT_MESSAGE = '当前系统还未配置可用沙箱资源'
 
 export function SandboxConnectionPrompt() {
   const [loading, setLoading] = useState(true)
@@ -52,7 +52,7 @@ export function SandboxConnectionPrompt() {
           <div className="text-sm font-semibold text-amber-900">{SANDBOX_PROMPT_MESSAGE}</div>
           <div className="mt-1 text-sm leading-6 text-amber-800/80">
             {message}
-            {isAdmin ? '。请在设置面板的“沙箱池”中维护实例 IP。' : '。请联系管理员维护沙箱池。'}
+            {isAdmin ? '。请在设置面板的“沙箱池”中维护实例 IP。' : '。请联系 风后（田萧波） 添加沙箱资源。'}
           </div>
         </div>
       </div>

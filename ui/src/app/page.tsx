@@ -4,7 +4,6 @@ import {FormEvent, useEffect, useRef, useState} from 'react'
 import {useRouter} from 'next/navigation'
 import {ChatHeader} from '@/components/chat-header'
 import {ChatInput, type ChatInputRef} from '@/components/chat-input'
-import {SandboxConnectionPrompt} from '@/components/sandbox-connection-prompt'
 import {SuggestedQuestions} from '@/components/suggested-questions'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
@@ -13,6 +12,18 @@ import {sessionApi} from '@/lib/api/session'
 import type {FileInfo} from '@/lib/api/types'
 import {clearAuthSession, getAuthSnapshot, setAuthSession, subscribeAuthChange} from '@/lib/auth'
 import {toast} from 'sonner'
+
+function encodeInitPayload(payload: string): string {
+  const bytes = new TextEncoder().encode(payload)
+  let binary = ''
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte)
+  }
+  return btoa(binary)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '')
+}
 
 export default function Page() {
   const router = useRouter()
@@ -109,8 +120,7 @@ export default function Page() {
       // 2. 将消息数据编码到 URL，在详情页发送
       const attachments = files.map((file) => file.id)
       const payload = JSON.stringify({ message, attachments })
-      // 使用 Base64 编码避免 URL 特殊字符问题
-      const encoded = btoa(encodeURIComponent(payload))
+      const encoded = encodeInitPayload(payload)
       
       // 3. 跳转到详情页，携带编码后的初始消息
       router.push(`/sessions/${sessionId}?init=${encoded}`)
@@ -166,7 +176,6 @@ export default function Page() {
             <div className="text-gray-700">您好, 地球人</div>
             <div className="text-gray-500">我能为您做什么?</div>
           </div>
-          <SandboxConnectionPrompt />
           {/* 对话框 */}
           <ChatInput
             ref={chatInputRef}

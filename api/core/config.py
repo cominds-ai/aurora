@@ -82,7 +82,7 @@ class Settings(BaseSettings):
     sandbox_https_proxy: Optional[str] = None
     sandbox_http_proxy: Optional[str] = None
     sandbox_no_proxy: Optional[str] = None
-    sandbox_binding_ttl_hours: int = 72
+    sandbox_binding_ttl_hours: int = 48
     sandbox_registry_json: str = "[]"
 
     # 使用pydantic v2的写法来完成环境变量信息的告知
