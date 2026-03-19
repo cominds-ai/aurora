@@ -23,11 +23,12 @@ import {Item, ItemContent, ItemDescription, ItemGroup, ItemTitle} from '@/compon
 import {Badge} from '@/components/ui/badge'
 import {Switch} from '@/components/ui/switch'
 import {Textarea} from '@/components/ui/textarea'
-import {configApi} from '@/lib/api'
+import {ApiError, configApi} from '@/lib/api'
 import type {
   AgentConfig,
   LLMConfig,
   SearchConfig,
+  SandboxPreference,
   SandboxOption,
   SandboxPoolItem,
   ListMCPServerItem,
@@ -298,14 +299,28 @@ function SearchSetting({config, onChange}: SearchSettingProps) {
 }
 
 type SandboxSettingProps = {
+  preference: SandboxPreference
   pool: SandboxPoolItem[]
   statuses: SandboxOption[]
   statusMessage: string
   isAdmin: boolean
+  poolApiAvailable: boolean
+  poolApiErrorMessage: string
+  onPreferenceChange: (preference: SandboxPreference) => void
   onPoolChange: (pool: SandboxPoolItem[]) => void
 }
 
-function SandboxSetting({pool, statuses, statusMessage, isAdmin, onPoolChange}: SandboxSettingProps) {
+function SandboxSetting({
+  preference,
+  pool,
+  statuses,
+  statusMessage,
+  isAdmin,
+  poolApiAvailable,
+  poolApiErrorMessage,
+  onPreferenceChange,
+  onPoolChange,
+}: SandboxSettingProps) {
   const [host, setHost] = useState('')
   const [label, setLabel] = useState('')
 
@@ -336,11 +351,29 @@ function SandboxSetting({pool, statuses, statusMessage, isAdmin, onPoolChange}: 
           <FieldLegend className="text-lg font-bold text-gray-700">系统沙箱池</FieldLegend>
           <FieldGroup>
             <Field>
+              <FieldLabel htmlFor="preferred_sandbox_host">专属沙箱 IP / 域名</FieldLabel>
+              <Input
+                id="preferred_sandbox_host"
+                type="text"
+                placeholder="10.x.x.x 或 dsw-sandbox.internal"
+                value={preference.preferred_sandbox_host ?? ''}
+                onChange={(e) => onPreferenceChange({preferred_sandbox_host: e.target.value})}
+              />
+              <FieldDescription className="text-xs">
+                填写后，当前账号会固定连接这台 DSW sandbox；留空则从系统沙箱池自动分配。
+              </FieldDescription>
+            </Field>
+            <Field>
               <FieldLabel>当前状态</FieldLabel>
               <FieldDescription className="text-xs">
                 {statusMessage || 'Aurora 会从系统沙箱池中为每个会话独占分配一台 sandbox。'}
               </FieldDescription>
             </Field>
+            {isAdmin && !poolApiAvailable && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-800">
+                {poolApiErrorMessage || '当前 API 后端未提供系统沙箱池接口，已退回到专属沙箱地址模式。请升级 API 后端并重启。'}
+              </div>
+            )}
             <div className="grid gap-3">
               {statuses.length === 0 && (
                 <div className="rounded-2xl border border-dashed border-stone-200 bg-stone-50 px-4 py-5 text-sm text-stone-500">
@@ -374,7 +407,7 @@ function SandboxSetting({pool, statuses, statusMessage, isAdmin, onPoolChange}: 
                 </div>
               ))}
             </div>
-            {isAdmin && (
+            {isAdmin && poolApiAvailable && (
               <>
                 <Field>
                   <FieldLabel htmlFor="sandbox_pool_host">新增沙箱 IP / 域名</FieldLabel>
@@ -819,9 +852,12 @@ export function AuroraSettings({
   const [agentConfig, setAgentConfig] = useState<AgentConfig>({})
   const [llmConfig, setLlmConfig] = useState<LLMConfig>({})
   const [searchConfig, setSearchConfig] = useState<SearchConfig>({})
+  const [sandboxPreference, setSandboxPreference] = useState<SandboxPreference>({})
   const [sandboxPool, setSandboxPool] = useState<SandboxPoolItem[]>([])
   const [sandboxStatuses, setSandboxStatuses] = useState<SandboxOption[]>([])
   const [sandboxStatusMessage, setSandboxStatusMessage] = useState('')
+  const [sandboxPoolApiAvailable, setSandboxPoolApiAvailable] = useState(true)
+  const [sandboxPoolApiErrorMessage, setSandboxPoolApiErrorMessage] = useState('')
   const [mcpServers, setMcpServers] = useState<ListMCPServerItem[]>([])
   const [a2aServers, setA2aServers] = useState<ListA2AServerItem[]>([])
   const [isSandboxPoolAdmin, setIsSandboxPoolAdmin] = useState(false)
@@ -849,13 +885,15 @@ export function AuroraSettings({
       configApi.getAgentConfig(),
       configApi.getLLMConfig(),
       configApi.getSearchConfig(),
+      configApi.getSandboxPreference(),
       configApi.getSandboxPreferenceStatus(),
       configApi.getSandboxes(),
     ])
-      .then(([agent, llm, search, sandboxStatus, sandboxes]) => {
+      .then(([agent, llm, search, preference, sandboxStatus, sandboxes]) => {
         setAgentConfig(agent)
         setLlmConfig(llm)
         setSearchConfig(search)
+        setSandboxPreference(preference)
         setSandboxStatusMessage(sandboxStatus.message ?? '')
         setSandboxStatuses(sandboxes?.sandboxes ?? [])
       })
@@ -870,12 +908,23 @@ export function AuroraSettings({
       configApi
         .getSystemSandboxPool()
         .then((data) => {
+          setSandboxPoolApiAvailable(true)
+          setSandboxPoolApiErrorMessage('')
           setSandboxPool(data?.sandbox_pool ?? [])
         })
         .catch((err) => {
           console.error('[Settings] 获取沙箱池配置失败:', err)
+          if (err instanceof ApiError && err.code === 404) {
+            setSandboxPoolApiAvailable(false)
+            setSandboxPoolApiErrorMessage('当前 API 后端未包含 /app-config/system/sandbox-pool，请升级到 2026-03-19 之后的版本并重启 API。')
+            setSandboxPool([])
+            return
+          }
+          setSandboxPoolApiAvailable(true)
         })
     } else {
+      setSandboxPoolApiAvailable(false)
+      setSandboxPoolApiErrorMessage('')
       setSandboxPool([])
     }
 
@@ -932,17 +981,33 @@ export function AuroraSettings({
         await configApi.updateSearchConfig(searchConfig)
         toast.success('Google 搜索配置保存成功')
       } else if (activeSetting === 'sandbox-setting') {
-        if (!isSandboxPoolAdmin) {
-          toast.error('当前账号无权修改沙箱池')
-          return
+        const updatedPreference = await configApi.updateSandboxPreference({
+          preferred_sandbox_host: (sandboxPreference.preferred_sandbox_host ?? '').trim() || null,
+        })
+        setSandboxPreference(updatedPreference)
+
+        let savedPool = false
+        if (isSandboxPoolAdmin && sandboxPoolApiAvailable) {
+          const updated = await configApi.updateSystemSandboxPool(sandboxPool)
+          setSandboxPool(updated.sandbox_pool ?? [])
+          savedPool = true
         }
-        const updated = await configApi.updateSystemSandboxPool(sandboxPool)
-        setSandboxPool(updated.sandbox_pool ?? [])
+
+        const sandboxStatus = await configApi.getSandboxPreferenceStatus()
+        setSandboxStatusMessage(sandboxStatus.message ?? '')
         const statuses = await configApi.getSandboxes()
         setSandboxStatuses(statuses?.sandboxes ?? [])
-        toast.success('沙箱池配置保存成功')
+        if (savedPool) {
+          toast.success('沙箱配置保存成功')
+        } else {
+          toast.success('专属沙箱地址保存成功')
+        }
       }
     } catch (err) {
+      if (activeSetting === 'sandbox-setting' && err instanceof ApiError && err.code === 404) {
+        toast.error('当前 API 后端未提供系统沙箱池接口，请升级 API 后端；专属沙箱地址仍可单独保存。')
+        return
+      }
       const msg = err instanceof Error ? err.message : '保存失败'
       toast.error(msg)
     } finally {
@@ -1131,13 +1196,17 @@ export function AuroraSettings({
                   <SearchSetting config={searchConfig} onChange={setSearchConfig}/>
                 )}
                 {activeSetting === 'sandbox-setting' && (
-                  <SandboxSetting
-                    pool={sandboxPool}
-                    statuses={sandboxStatuses}
-                    statusMessage={sandboxStatusMessage}
-                    isAdmin={isSandboxPoolAdmin}
-                    onPoolChange={setSandboxPool}
-                  />
+              <SandboxSetting
+                preference={sandboxPreference}
+                pool={sandboxPool}
+                statuses={sandboxStatuses}
+                statusMessage={sandboxStatusMessage}
+                isAdmin={isSandboxPoolAdmin}
+                poolApiAvailable={sandboxPoolApiAvailable}
+                poolApiErrorMessage={sandboxPoolApiErrorMessage}
+                onPreferenceChange={setSandboxPreference}
+                onPoolChange={setSandboxPool}
+              />
                 )}
               </>
             )}
