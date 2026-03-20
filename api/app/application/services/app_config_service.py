@@ -36,7 +36,7 @@ class AppConfigService:
         app_config = await self._load_app_config()
         app_config.llm_config = ensure_builtin_llm_providers(
             app_config.llm_config,
-            gemini3_api_key=self._settings.aurora_official_default_gemini3_api_key,
+            gpt_api_key=self._settings.aurora_official_default_gpt_api_key,
             claude_api_key=self._settings.aurora_official_default_claude_api_key,
         )
         return app_config.llm_config
@@ -47,12 +47,12 @@ class AppConfigService:
         app_config = await self._load_app_config()
         app_config.llm_config = ensure_builtin_llm_providers(
             app_config.llm_config,
-            gemini3_api_key=self._settings.aurora_official_default_gemini3_api_key,
+            gpt_api_key=self._settings.aurora_official_default_gpt_api_key,
             claude_api_key=self._settings.aurora_official_default_claude_api_key,
         )
         llm_config = ensure_builtin_llm_providers(
             llm_config,
-            gemini3_api_key=self._settings.aurora_official_default_gemini3_api_key,
+            gpt_api_key=self._settings.aurora_official_default_gpt_api_key,
             claude_api_key=self._settings.aurora_official_default_claude_api_key,
         )
 

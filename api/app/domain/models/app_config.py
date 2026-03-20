@@ -6,7 +6,7 @@ from typing import Dict, Optional, List, Any
 from pydantic import AnyHttpUrl, BaseModel, Field, ConfigDict, model_validator, field_validator
 
 
-BUILTIN_GEMINI3_PROVIDER_ID = "builtin-gemini3"
+BUILTIN_GPT_PROVIDER_ID = "builtin-gpt"
 BUILTIN_CLAUDE_PROVIDER_ID = "builtin-claude"
 
 
@@ -203,17 +203,17 @@ class AppConfig(BaseModel):
 
 
 def build_builtin_llm_providers(
-        gemini3_api_key: str = "",
+        gpt_api_key: str = "",
         claude_api_key: str = "",
 ) -> List[LLMProviderConfig]:
     return [
         LLMProviderConfig(
-            id=BUILTIN_GEMINI3_PROVIDER_ID,
-            provider=LLMProviderType.GEMINI3,
-            name="官方默认gemini3",
-            base_url="https://runway.devops.rednote.life/openai/google/v1:generateContent",
-            api_key=gemini3_api_key,
-            model_name="gemini-3-pro",
+            id=BUILTIN_GPT_PROVIDER_ID,
+            provider=LLMProviderType.OPENAI_COMPATIBLE,
+            name="官方默认gpt",
+            base_url="https://codex.ysaikeji.cn/v1",
+            api_key=gpt_api_key,
+            model_name="gpt-5.4",
             temperature=0.7,
             max_tokens=8192,
             vision_enabled=True,
@@ -235,11 +235,11 @@ def build_builtin_llm_providers(
 
 
 def build_default_llm_config(
-        gemini3_api_key: str = "",
+        gpt_api_key: str = "",
         claude_api_key: str = "",
 ) -> LLMConfig:
     providers = build_builtin_llm_providers(
-        gemini3_api_key=gemini3_api_key,
+        gpt_api_key=gpt_api_key,
         claude_api_key=claude_api_key,
     )
     return LLMConfig(
@@ -250,12 +250,17 @@ def build_default_llm_config(
 
 def ensure_builtin_llm_providers(
         llm_config: LLMConfig,
-        gemini3_api_key: str = "",
+        gpt_api_key: str = "",
         claude_api_key: str = "",
 ) -> LLMConfig:
+    llm_config.providers = [
+        provider
+        for provider in llm_config.providers
+        if provider.id != "builtin-gemini3"
+    ]
     providers_by_id = {provider.id: provider for provider in llm_config.providers}
     for builtin_provider in build_builtin_llm_providers(
-            gemini3_api_key=gemini3_api_key,
+            gpt_api_key=gpt_api_key,
             claude_api_key=claude_api_key,
     ):
         if builtin_provider.id not in providers_by_id:

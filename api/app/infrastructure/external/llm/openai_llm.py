@@ -41,6 +41,21 @@ class OpenAILLM(LLM):
     def max_tokens(self) -> int:
         return self._max_tokens
 
+    @staticmethod
+    def _normalize_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        normalized_messages: List[Dict[str, Any]] = []
+        for message in messages:
+            normalized = dict(message)
+            content = normalized.get("content")
+            if (
+                    normalized.get("role") == "assistant" and
+                    normalized.get("tool_calls") and
+                    content in (None, "")
+            ):
+                normalized.pop("content", None)
+            normalized_messages.append(normalized)
+        return normalized_messages
+
     async def invoke(
             self,
             messages: List[Dict[str, Any]],
@@ -49,6 +64,7 @@ class OpenAILLM(LLM):
             tool_choice: str = None,
     ) -> Dict[str, Any]:
         """使用异步OpenAI客户端发起块响应（该步骤可以切换成流式响应）"""
+        normalized_messages = self._normalize_messages(messages)
         try:
             # 1.检测是否传递了工具列表
             if tools:
@@ -57,7 +73,7 @@ class OpenAILLM(LLM):
                     model=self._model_name,
                     temperature=self._temperature,
                     max_tokens=self._max_tokens,
-                    messages=messages,
+                    messages=normalized_messages,
                     response_format=response_format,
                     tools=tools,
                     tool_choice=tool_choice,
@@ -71,7 +87,7 @@ class OpenAILLM(LLM):
                     model=self._model_name,
                     temperature=self._temperature,
                     max_tokens=self._max_tokens,
-                    messages=messages,
+                    messages=normalized_messages,
                     response_format=response_format,
                     timeout=self._timeout,
                 )

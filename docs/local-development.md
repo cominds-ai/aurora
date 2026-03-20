@@ -119,7 +119,7 @@ http://localhost:3000
 说明：
 
 - 如果代码同级目录存在 `.aurora-secrets.env`，可通过以下环境变量预置内置 provider 密钥：
-  - `AURORA_OFFICIAL_DEFAULT_GEMINI3_API_KEY`
+  - `AURORA_OFFICIAL_DEFAULT_GPT_API_KEY`
   - `AURORA_OFFICIAL_DEFAULT_CLAUDE_API_KEY`
 - 不填当前激活 provider 的 `api_key` 时，页面可以打开，但模型调用会失败
 - 不填 `SerpAPI Key` 时，Google 搜索功能不可用

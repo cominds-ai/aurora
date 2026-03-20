@@ -64,7 +64,7 @@ class Settings(BaseSettings):
     # 默认模型配置
     default_llm_base_url: str = "https://codex.ysaikeji.cn/v1"
     default_llm_model_name: str = "gpt-5.4"
-    aurora_official_default_gemini3_api_key: str = ""
+    aurora_official_default_gpt_api_key: str = ""
     aurora_official_default_claude_api_key: str = ""
 
     # 认证配置

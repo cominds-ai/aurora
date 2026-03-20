@@ -20,7 +20,7 @@ class DBUserConfigRepository(UserConfigRepository):
     def _default_app_config(self) -> AppConfig:
         return AppConfig(
             llm_config=build_default_llm_config(
-                gemini3_api_key=self._settings.aurora_official_default_gemini3_api_key,
+                gpt_api_key=self._settings.aurora_official_default_gpt_api_key,
                 claude_api_key=self._settings.aurora_official_default_claude_api_key,
             ),
             agent_config=AgentConfig(),
@@ -47,7 +47,7 @@ class DBUserConfigRepository(UserConfigRepository):
         })
         app_config.llm_config = ensure_builtin_llm_providers(
             app_config.llm_config,
-            gemini3_api_key=self._settings.aurora_official_default_gemini3_api_key,
+            gpt_api_key=self._settings.aurora_official_default_gpt_api_key,
             claude_api_key=self._settings.aurora_official_default_claude_api_key,
         )
         return app_config

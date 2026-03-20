@@ -100,7 +100,9 @@ class BaseAgent(ABC):
                         continue
 
                     # 6.取出非空消息并处理工具调用(兼容DeepSeek思考模型的写法)
-                    filtered_message = {"role": "assistant", "content": message.get("content")}
+                    filtered_message = {"role": "assistant"}
+                    if message.get("content") not in (None, ""):
+                        filtered_message["content"] = message.get("content")
                     if message.get("reasoning_content"):
                         filtered_message["reasoning_content"] = message.get("reasoning_content")
                     if message.get("tool_calls"):

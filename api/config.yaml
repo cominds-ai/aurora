@@ -1,12 +1,12 @@
 llm_config:
-  active_provider_id: builtin-gemini3
+  active_provider_id: builtin-gpt
   providers:
-    - id: builtin-gemini3
-      provider: gemini3
-      name: 官方默认gemini3
-      base_url: https://runway.devops.rednote.life/openai/google/v1:generateContent
+    - id: builtin-gpt
+      provider: openai_compatible
+      name: 官方默认gpt
+      base_url: https://codex.ysaikeji.cn/v1
       api_key: ""
-      model_name: gemini-3-pro
+      model_name: gpt-5.4
       temperature: 0.7
       max_tokens: 8192
       vision_enabled: true
