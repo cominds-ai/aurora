@@ -58,9 +58,21 @@ class GeminiLLM(LLM):
             response = await self._client.post(self._base_url, headers=headers, json=payload)
             response.raise_for_status()
             return self._convert_response(response.json())
+        except httpx.HTTPStatusError as e:
+            detail = (e.response.text or "").strip()
+            logger.error(
+                "调用Gemini3供应商发生HTTP错误: status=%s body=%s",
+                e.response.status_code,
+                detail[:2000],
+            )
+            raise ServerRequestsError(
+                f"调用Gemini3供应商向LLM发起请求出错: HTTP {e.response.status_code}"
+                + (f" - {detail[:500]}" if detail else "")
+            )
         except Exception as e:
-            logger.error("调用Gemini3供应商发生错误: %s", e)
-            raise ServerRequestsError("调用Gemini3供应商向LLM发起请求出错")
+            detail = str(e).strip() or repr(e)
+            logger.error("调用Gemini3供应商发生错误: %s", detail)
+            raise ServerRequestsError(f"调用Gemini3供应商向LLM发起请求出错: {detail}")
 
     def _build_headers(self) -> Dict[str, str]:
         headers = {
@@ -95,7 +107,6 @@ class GeminiLLM(LLM):
                 contents.append(converted)
 
         payload: Dict[str, Any] = {
-            "model": self._model_name,
             "contents": contents,
             "generationConfig": {
                 "temperature": self._temperature,

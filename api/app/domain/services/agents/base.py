@@ -4,6 +4,7 @@ import uuid
 from abc import ABC
 from typing import Optional, List, AsyncGenerator, Dict, Any, Callable
 
+from app.application.errors.exceptions import AppException
 from app.domain.external.json_parser import JSONParser
 from app.domain.external.llm import LLM
 from app.domain.models.app_config import AgentConfig
@@ -115,8 +116,8 @@ class BaseAgent(ABC):
                 return filtered_message
             except Exception as e:
                 # 10.记录日志并睡眠指定的时间
-                logger.error(f"调用语言模型发生错误: {str(e)}")
-                error = str(e)
+                error = e.msg if isinstance(e, AppException) else str(e)
+                logger.error(f"调用语言模型发生错误: {error}")
                 await asyncio.sleep(self._retry_interval)
                 continue
 

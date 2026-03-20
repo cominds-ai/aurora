@@ -2,6 +2,7 @@ import logging
 from typing import List, Dict, Any
 
 from openai import AsyncOpenAI
+from openai import APIError
 
 from app.application.errors.exceptions import ServerRequestsError
 from app.domain.external.llm import LLM
@@ -78,9 +79,14 @@ class OpenAILLM(LLM):
             # 3.处理响应数据并返回
             logger.info(f"OpenAI客户端返回内容: {response.model_dump()}")
             return response.choices[0].message.model_dump()
+        except APIError as e:
+            detail = str(e).strip() or repr(e)
+            logger.error("调用OpenAI客户端发生API错误: %s", detail)
+            raise ServerRequestsError(f"调用OpenAI客户端向LLM发起请求出错: {detail}")
         except Exception as e:
-            logger.error(f"调用OpenAI客户端发生错误: {str(e)}")
-            raise ServerRequestsError("调用OpenAI客户端向LLM发起请求出错")
+            detail = str(e).strip() or repr(e)
+            logger.error("调用OpenAI客户端发生错误: %s", detail)
+            raise ServerRequestsError(f"调用OpenAI客户端向LLM发起请求出错: {detail}")
 
 
 if __name__ == "__main__":
