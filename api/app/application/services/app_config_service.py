@@ -4,12 +4,13 @@ from typing import List
 
 from app.application.errors.exceptions import NotFoundError
 from app.domain.models.app_config import AppConfig, LLMConfig, AgentConfig, MCPConfig, A2AConfig, A2AServerConfig, \
-    SearchConfig, SandboxPreference
+    SearchConfig, SandboxPreference, ensure_builtin_llm_providers
 from app.domain.models.sandbox_binding import SandboxBinding
 from app.domain.repositories.uow import IUnitOfWork
 from app.domain.services.tools.a2a import A2AClientManager
 from app.domain.services.tools.mcp import MCPClientManager
 from app.interfaces.schemas.app_config import ListMCPServerItem, ListA2AServerItem
+from core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,7 @@ class AppConfigService:
     def __init__(self, uow_factory: callable, user_id: str) -> None:
         self._uow_factory = uow_factory
         self._user_id = user_id
+        self._settings = get_settings()
 
     async def _load_app_config(self) -> AppConfig:
         async with self._uow_factory() as uow:
@@ -32,18 +34,35 @@ class AppConfigService:
     async def get_llm_config(self) -> LLMConfig:
         """获取LLM提供商配置"""
         app_config = await self._load_app_config()
+        app_config.llm_config = ensure_builtin_llm_providers(
+            app_config.llm_config,
+            gemini3_api_key=self._settings.aurora_official_default_gemini3_api_key,
+            claude_api_key=self._settings.aurora_official_default_claude_api_key,
+        )
         return app_config.llm_config
 
     async def update_llm_config(self, llm_config: LLMConfig) -> LLMConfig:
         """根据传递的llm_config更新语言模型提供商配置"""
         # 1.获取应用配置
         app_config = await self._load_app_config()
+        app_config.llm_config = ensure_builtin_llm_providers(
+            app_config.llm_config,
+            gemini3_api_key=self._settings.aurora_official_default_gemini3_api_key,
+            claude_api_key=self._settings.aurora_official_default_claude_api_key,
+        )
+        llm_config = ensure_builtin_llm_providers(
+            llm_config,
+            gemini3_api_key=self._settings.aurora_official_default_gemini3_api_key,
+            claude_api_key=self._settings.aurora_official_default_claude_api_key,
+        )
 
-        # 2.判断api_key是否为空
-        if not llm_config.api_key.strip():
-            llm_config.api_key = app_config.llm_config.api_key
+        existing_providers = {provider.id: provider for provider in app_config.llm_config.providers}
+        for provider in llm_config.providers:
+            existing = existing_providers.get(provider.id)
+            if existing and not provider.api_key.strip():
+                provider.api_key = existing.api_key
 
-        # 3.调用函数更新app_config
+        # 2.调用函数更新app_config
         app_config.llm_config = llm_config
         await self._save_app_config(app_config)
 

@@ -5,7 +5,7 @@ from openai import AsyncOpenAI
 
 from app.application.errors.exceptions import ServerRequestsError
 from app.domain.external.llm import LLM
-from app.domain.models.app_config import LLMConfig
+from app.domain.models.app_config import LLMProviderConfig
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class OpenAILLM(LLM):
     """基于OpenAI SDK/兼容OpenAI格式的LLM调用类"""
 
-    def __init__(self, llm_config: LLMConfig, **kwargs) -> None:
+    def __init__(self, llm_config: LLMProviderConfig, **kwargs) -> None:
         """构造函数，完成异步OpenAI客户端的创建和参数初始化"""
         # 1.初始化异步客户端
         self._client = AsyncOpenAI(
@@ -88,7 +88,7 @@ if __name__ == "__main__":
 
 
     async def main():
-        llm = OpenAILLM(LLMConfig(
+        llm = OpenAILLM(LLMProviderConfig(
             base_url="https://codex.ysaikeji.cn/v1",
             api_key="",
             model_name="gpt-5.4",

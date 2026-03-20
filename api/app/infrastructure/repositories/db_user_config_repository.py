@@ -3,10 +3,11 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.models.app_config import AppConfig, LLMConfig, AgentConfig, SearchConfig, MCPConfig, A2AConfig, \
-    SandboxPreference
+from app.domain.models.app_config import AppConfig, AgentConfig, SearchConfig, MCPConfig, A2AConfig, \
+    SandboxPreference, build_default_llm_config, ensure_builtin_llm_providers
 from app.domain.repositories.user_config_repository import UserConfigRepository
 from app.infrastructure.models import UserConfigModel
+from core.config import get_settings
 
 
 class DBUserConfigRepository(UserConfigRepository):
@@ -14,11 +15,14 @@ class DBUserConfigRepository(UserConfigRepository):
 
     def __init__(self, db_session: AsyncSession) -> None:
         self.db_session = db_session
+        self._settings = get_settings()
 
-    @staticmethod
-    def _default_app_config() -> AppConfig:
+    def _default_app_config(self) -> AppConfig:
         return AppConfig(
-            llm_config=LLMConfig(),
+            llm_config=build_default_llm_config(
+                gemini3_api_key=self._settings.aurora_official_default_gemini3_api_key,
+                claude_api_key=self._settings.aurora_official_default_claude_api_key,
+            ),
             agent_config=AgentConfig(),
             search_config=SearchConfig(),
             mcp_config=MCPConfig(),
@@ -33,7 +37,7 @@ class DBUserConfigRepository(UserConfigRepository):
         if not record:
             return self._default_app_config()
 
-        return AppConfig.model_validate({
+        app_config = AppConfig.model_validate({
             "llm_config": record.llm_config,
             "agent_config": record.agent_config,
             "search_config": record.search_config,
@@ -41,6 +45,12 @@ class DBUserConfigRepository(UserConfigRepository):
             "a2a_config": record.a2a_config,
             "sandbox_preference": record.sandbox_preference,
         })
+        app_config.llm_config = ensure_builtin_llm_providers(
+            app_config.llm_config,
+            gemini3_api_key=self._settings.aurora_official_default_gemini3_api_key,
+            claude_api_key=self._settings.aurora_official_default_claude_api_key,
+        )
+        return app_config
 
     async def save(self, user_id: str, app_config: AppConfig) -> None:
         stmt = select(UserConfigModel).where(UserConfigModel.user_id == user_id)

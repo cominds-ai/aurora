@@ -51,9 +51,17 @@ export type LoginData = {
 // ==================== 配置模块类型 ====================
 
 /**
- * LLM 配置
+ * LLM 提供商类型
  */
-export type LLMConfig = {
+export type LLMProviderType = "openai_compatible" | "gemini3" | "claude";
+
+/**
+ * 单个 LLM 提供商配置
+ */
+export type LLMProviderConfig = {
+  id: string;
+  provider?: LLMProviderType;
+  name?: string;
   base_url?: string;
   api_key?: string;
   api_key_configured?: boolean;
@@ -61,6 +69,17 @@ export type LLMConfig = {
   temperature?: number;
   max_tokens?: number;
   vision_enabled?: boolean;
+  builtin?: boolean;
+  [key: string]: unknown;
+};
+
+/**
+ * LLM 配置
+ */
+export type LLMConfig = {
+  active_provider_id?: string;
+  api_key_configured?: boolean;
+  providers?: LLMProviderConfig[];
   [key: string]: unknown;
 };
 

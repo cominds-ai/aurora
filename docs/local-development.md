@@ -109,15 +109,19 @@ http://localhost:3000
 
 登录后，打开右上角 `Aurora 设置`，至少补齐以下配置：
 
-- `base_url`: `https://codex.ysaikeji.cn/v1`
-- `model_name`: `gpt-5.4`
-- `api_key`: 你自己的模型密钥
+- 选择一个当前要使用的模型 provider
+- `base_url`: provider 对应地址
+- `model_name`: provider 对应模型名
+- `api_key`: provider 对应模型密钥
 - `SerpAPI Key`: 你自己的 Google 搜索密钥
 - `DSW 沙箱地址`: 本地联调时填写 `127.0.0.1`
 
 说明：
 
-- 不填 `api_key` 时，页面可以打开，但模型调用会失败
+- 如果代码同级目录存在 `.aurora-secrets.env`，可通过以下环境变量预置内置 provider 密钥：
+  - `AURORA_OFFICIAL_DEFAULT_GEMINI3_API_KEY`
+  - `AURORA_OFFICIAL_DEFAULT_CLAUDE_API_KEY`
+- 不填当前激活 provider 的 `api_key` 时，页面可以打开，但模型调用会失败
 - 不填 `SerpAPI Key` 时，Google 搜索功能不可用
 - 不填 `DSW 沙箱地址` 时，系统会提示“沙箱没有配置，沙箱不可用”，并且不会自动连接本地 sandbox
 

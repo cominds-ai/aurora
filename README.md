@@ -72,13 +72,21 @@ npm run dev:down
 
 - 首次输入账号登录时会自动注册
 - 默认密码固定为 `123456`
-- 系统不内置用户级 LLM / SerpAPI 密钥
+- 系统默认内置两个模型提供商：
+  - `官方默认gemini3`
+  - `官方默认claude`
 - 用户首次登录后，通过右上角 `Aurora 设置` 配置：
-  - OpenAI 兼容 `base_url`
-  - `api_key`
-  - 默认模型 `gpt-5.4`
+  - 多个模型提供商及当前激活 provider
+  - provider 对应的 `base_url`
+  - provider 对应的 `api_key`
+  - provider 对应的 `model_name`
   - SerpAPI Key
   - DSW 沙箱地址
+
+两个内置 provider 的 API Key 默认从代码同级目录的 `.aurora-secrets.env` 读取：
+
+- `AURORA_OFFICIAL_DEFAULT_GEMINI3_API_KEY`
+- `AURORA_OFFICIAL_DEFAULT_CLAUDE_API_KEY`
 
 ## 系统级配置
 

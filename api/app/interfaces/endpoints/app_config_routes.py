@@ -9,7 +9,8 @@ from app.domain.models.system_config import SystemConfig
 from app.domain.models.app_config import LLMConfig, AgentConfig, MCPConfig, SearchConfig, SandboxPreference
 from app.domain.models.user import User
 from app.interfaces.schemas.app_config import ListMCPServerResponse, ListA2AServerResponse, ListSandboxOptionResponse, \
-    SandboxOptionItem, SandboxPreferenceStatusResponse, LLMConfigResponse, SearchConfigResponse, \
+    SandboxOptionItem, SandboxPreferenceStatusResponse, LLMConfigResponse, LLMProviderConfigResponse, \
+    SearchConfigResponse, \
     SystemSandboxPoolResponse
 from app.interfaces.schemas.base import Response
 from app.interfaces.service_dependencies import get_app_config_service, get_sandbox_service, get_current_user
@@ -23,6 +24,21 @@ def ensure_sandbox_pool_admin(current_user: User) -> None:
         raise HTTPException(status_code=403, detail="当前用户无权管理沙箱池")
 
 
+def build_llm_config_response(llm_config: LLMConfig) -> LLMConfigResponse:
+    active_provider = llm_config.get_active_provider()
+    return LLMConfigResponse(
+        active_provider_id=llm_config.active_provider_id or "",
+        api_key_configured=bool(active_provider.api_key.strip()),
+        providers=[
+            LLMProviderConfigResponse(
+                **provider.model_dump(mode="json", exclude={"api_key"}),
+                api_key_configured=bool(provider.api_key.strip()),
+            )
+            for provider in llm_config.providers
+        ],
+    )
+
+
 @router.get(
     path="/llm",
     response_model=Response[LLMConfigResponse],
@@ -34,10 +50,7 @@ async def get_llm_config(
 ) -> Response[LLMConfigResponse]:
     """获取LLM配置信息"""
     llm_config = await app_config_service.get_llm_config()
-    return Response.success(data=LLMConfigResponse(
-        **llm_config.model_dump(mode="json", exclude={"api_key"}),
-        api_key_configured=bool(llm_config.api_key.strip()),
-    ))
+    return Response.success(data=build_llm_config_response(llm_config))
 
 
 @router.post(
@@ -54,10 +67,7 @@ async def update_llm_config(
     updated_llm_config = await app_config_service.update_llm_config(new_llm_config)
     return Response.success(
         msg="更新LLM信息配置成功",
-        data=LLMConfigResponse(
-            **updated_llm_config.model_dump(mode="json", exclude={"api_key"}),
-            api_key_configured=bool(updated_llm_config.api_key.strip()),
-        )
+        data=build_llm_config_response(updated_llm_config)
     )
 
 

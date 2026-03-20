@@ -14,7 +14,7 @@ from app.domain.models.session import Session, SessionStatus
 from app.domain.models.user import User
 from app.domain.repositories.uow import IUnitOfWork
 from app.domain.services.agent_task_runner import AgentTaskRunner
-from app.infrastructure.external.llm.openai_llm import OpenAILLM
+from app.infrastructure.external.llm.factory import build_llm
 from app.infrastructure.external.search.serpapi_google_search import SerpAPIGoogleSearchEngine
 from .sandbox_service import SandboxService
 from app.domain.models.app_config import SandboxPreference
@@ -65,7 +65,7 @@ class AgentService:
         # 5.创建AgentTaskRunner
         task_runner = AgentTaskRunner(
             uow_factory=self._uow_factory,
-            llm=OpenAILLM(app_config.llm_config),
+            llm=build_llm(app_config.llm_config.get_active_provider()),
             agent_config=app_config.agent_config,
             mcp_config=app_config.mcp_config,
             a2a_config=app_config.a2a_config,

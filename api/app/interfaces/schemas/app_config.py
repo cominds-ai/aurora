@@ -6,13 +6,23 @@ from app.domain.models.system_config import SandboxPoolItem
 from app.domain.models.app_config import MCPTransport
 
 
-class LLMConfigResponse(BaseModel):
+class LLMProviderConfigResponse(BaseModel):
+    id: str = ""
+    provider: str = ""
+    name: str = ""
     base_url: str = ""
     model_name: str = ""
     temperature: float = 0.7
     max_tokens: int = 8192
     vision_enabled: bool = True
+    builtin: bool = False
     api_key_configured: bool = False
+
+
+class LLMConfigResponse(BaseModel):
+    active_provider_id: str = ""
+    api_key_configured: bool = False
+    providers: List[LLMProviderConfigResponse] = Field(default_factory=list)
 
 
 class SearchConfigResponse(BaseModel):

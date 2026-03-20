@@ -1,10 +1,26 @@
 llm_config:
-  base_url: https://codex.ysaikeji.cn/v1
-  api_key: ""
-  model_name: gpt-5.4
-  temperature: 0.7
-  max_tokens: 8192
-  vision_enabled: true
+  active_provider_id: builtin-gemini3
+  providers:
+    - id: builtin-gemini3
+      provider: gemini3
+      name: 官方默认gemini3
+      base_url: https://runway.devops.rednote.life/openai/google/v1:generateContent
+      api_key: ""
+      model_name: gemini-3-pro
+      temperature: 0.7
+      max_tokens: 8192
+      vision_enabled: true
+      builtin: true
+    - id: builtin-claude
+      provider: claude
+      name: 官方默认claude
+      base_url: https://api.getgoapi.com/v1
+      api_key: ""
+      model_name: claude-opus-4-5-20251101-thinking
+      temperature: 0.7
+      max_tokens: 8192
+      vision_enabled: true
+      builtin: true
 agent_config:
   max_iterations: 100
   max_retries: 3

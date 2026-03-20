@@ -27,6 +27,7 @@ export type {
   LoginParams,
   LoginData,
   LLMConfig,
+  LLMProviderConfig,
   AgentConfig,
   SearchConfig,
   SandboxPreference,

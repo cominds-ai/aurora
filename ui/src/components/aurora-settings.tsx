@@ -27,6 +27,7 @@ import {ApiError, configApi} from '@/lib/api'
 import type {
   AgentConfig,
   LLMConfig,
+  LLMProviderConfig,
   SearchConfig,
   SandboxPreference,
   SandboxOption,
@@ -118,22 +119,61 @@ type LLMSettingProps = {
 }
 
 function LLMSetting({config, onChange}: LLMSettingProps) {
-  const [editingApiKey, setEditingApiKey] = useState(false)
-
-  const hasStoredApiKey = Boolean(config.api_key_configured && !(config.api_key ?? '').trim())
-  const apiKeyValue = hasStoredApiKey && !editingApiKey ? CONFIGURED_SECRET_MASK : (config.api_key ?? '')
+  const [selectedProviderId, setSelectedProviderId] = useState('')
+  const [editingApiKeyByProvider, setEditingApiKeyByProvider] = useState<Record<string, boolean>>({})
+  const providers = config.providers ?? []
 
   useEffect(() => {
-    setEditingApiKey(false)
-  }, [config.api_key_configured])
+    if (providers.length === 0) {
+      setSelectedProviderId('')
+      return
+    }
 
-  const handleChange = (field: keyof LLMConfig, value: string) => {
-    onChange({...config, [field]: value})
+    const nextSelectedId = providers.some((item) => item.id === selectedProviderId)
+      ? selectedProviderId
+      : (config.active_provider_id && providers.some((item) => item.id === config.active_provider_id)
+          ? config.active_provider_id
+          : providers[0].id)
+
+    if (nextSelectedId !== selectedProviderId) {
+      setSelectedProviderId(nextSelectedId)
+    }
+  }, [config.active_provider_id, providers, selectedProviderId])
+
+  const selectedProvider = providers.find((item) => item.id === selectedProviderId) ?? providers[0]
+  const isEditingApiKey = Boolean(selectedProvider && editingApiKeyByProvider[selectedProvider.id])
+  const hasStoredApiKey = Boolean(
+    selectedProvider?.api_key_configured && !(selectedProvider?.api_key ?? '').trim(),
+  )
+  const apiKeyValue = hasStoredApiKey && !isEditingApiKey
+    ? CONFIGURED_SECRET_MASK
+    : (selectedProvider?.api_key ?? '')
+
+  const updateProvider = (providerId: string, updater: (provider: LLMProviderConfig) => LLMProviderConfig) => {
+    onChange({
+      ...config,
+      providers: providers.map((provider) => provider.id === providerId ? updater(provider) : provider),
+    })
   }
 
-  const handleNumberChange = (field: keyof LLMConfig, value: string) => {
+  const handleChange = (field: keyof LLMProviderConfig, value: string) => {
+    if (!selectedProvider) return
+    updateProvider(selectedProvider.id, (provider) => ({...provider, [field]: value}))
+  }
+
+  const handleNumberChange = (field: keyof LLMProviderConfig, value: string) => {
+    if (!selectedProvider) return
     const numValue = value === '' ? undefined : Number(value)
-    onChange({...config, [field]: numValue})
+    updateProvider(selectedProvider.id, (provider) => ({...provider, [field]: numValue}))
+  }
+
+  const handleSetActive = (providerId: string) => {
+    onChange({...config, active_provider_id: providerId})
+    setSelectedProviderId(providerId)
+  }
+
+  if (!selectedProvider) {
+    return null
   }
 
   return (
@@ -142,17 +182,77 @@ function LLMSetting({config, onChange}: LLMSettingProps) {
         <FieldSet>
           <FieldLegend className="text-lg font-bold text-gray-700">模型提供商</FieldLegend>
           <FieldGroup>
+            <div className="grid gap-3 md:grid-cols-2">
+              {providers.map((provider) => {
+                const isActive = provider.id === config.active_provider_id
+                const isSelected = provider.id === selectedProvider.id
+                return (
+                  <div
+                    key={provider.id}
+                    onClick={() => setSelectedProviderId(provider.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        setSelectedProviderId(provider.id)
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    className={cn(
+                      'rounded-2xl border px-4 py-4 text-left transition',
+                      isSelected
+                        ? 'border-stone-900 bg-stone-50'
+                        : 'border-stone-200 bg-white hover:border-stone-300',
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-stone-900">{provider.name || provider.id}</div>
+                        <div className="mt-1 text-xs text-stone-500">{provider.provider}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {provider.builtin && <Badge variant="secondary">内置</Badge>}
+                        {provider.api_key_configured && <Badge variant="outline">已配密钥</Badge>}
+                        {isActive && <Badge>当前</Badge>}
+                      </div>
+                    </div>
+                    {!isActive && (
+                      <div className="mt-3">
+                        <Button
+                          type="button"
+                          size="xs"
+                          variant="outline"
+                          className="cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleSetActive(provider.id)
+                          }}
+                        >
+                          设为当前模型
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+            <Field>
+              <FieldLabel>当前编辑提供商</FieldLabel>
+              <FieldDescription className="text-xs">
+                {selectedProvider.name} · {selectedProvider.provider}
+              </FieldDescription>
+            </Field>
             <Field>
               <FieldLabel htmlFor="base_url">提供商基础地址(base_url)</FieldLabel>
               <Input
                 id="base_url"
                 type="url"
                 placeholder="请填写LLM基础URL地址"
-                value={config.base_url ?? ''}
+                value={selectedProvider.base_url ?? ''}
                 onChange={(e) => handleChange('base_url', e.target.value)}
               />
               <FieldDescription className="text-xs">
-                请填写模型提供商的基础 url 地址，需兼容 OpenAI 格式。
+                Gemini3 会走专门适配；Claude 和其他供应商按 OpenAI 兼容协议调用。
               </FieldDescription>
             </Field>
             <Field>
@@ -163,18 +263,18 @@ function LLMSetting({config, onChange}: LLMSettingProps) {
                 placeholder="请填写提供商API密钥"
                 value={apiKeyValue}
                 onFocus={() => {
-                  if (hasStoredApiKey && !editingApiKey) {
-                    setEditingApiKey(true)
+                  if (hasStoredApiKey && !isEditingApiKey) {
+                    setEditingApiKeyByProvider((prev) => ({...prev, [selectedProvider.id]: true}))
                   }
                 }}
                 onBlur={() => {
-                  if (!(config.api_key ?? '').trim()) {
-                    setEditingApiKey(false)
+                  if (!(selectedProvider.api_key ?? '').trim()) {
+                    setEditingApiKeyByProvider((prev) => ({...prev, [selectedProvider.id]: false}))
                   }
                 }}
                 onChange={(e) => {
-                  if (!editingApiKey) {
-                    setEditingApiKey(true)
+                  if (!isEditingApiKey) {
+                    setEditingApiKeyByProvider((prev) => ({...prev, [selectedProvider.id]: true}))
                   }
                   handleChange('api_key', e.target.value)
                 }}
@@ -189,7 +289,7 @@ function LLMSetting({config, onChange}: LLMSettingProps) {
                 id="model_name"
                 type="text"
                 placeholder="请填写需要使用的模型名字"
-                value={config.model_name ?? ''}
+                value={selectedProvider.model_name ?? ''}
                 onChange={(e) => handleChange('model_name', e.target.value)}
               />
               <FieldDescription className="text-xs">
@@ -202,7 +302,7 @@ function LLMSetting({config, onChange}: LLMSettingProps) {
                 id="temperature"
                 type="number"
                 placeholder="请填写模型温度"
-                value={config.temperature ?? 0.7}
+                value={selectedProvider.temperature ?? 0.7}
                 onChange={(e) => handleNumberChange('temperature', e.target.value)}
                 min={0}
                 max={2}
@@ -218,7 +318,7 @@ function LLMSetting({config, onChange}: LLMSettingProps) {
                 id="max_tokens"
                 type="number"
                 placeholder="请填写模型最大输出Token数"
-                value={config.max_tokens ?? 8192}
+                value={selectedProvider.max_tokens ?? 8192}
                 onChange={(e) => handleNumberChange('max_tokens', e.target.value)}
                 min={1}
                 max={128000}
@@ -400,7 +500,7 @@ function SandboxSetting({
                         {item.healthy ? '健康' : '不可达'}
                       </Badge>
                       <Badge variant={item.available ? 'outline' : 'secondary'}>
-                        {item.available ? '空闲' : '占用中'}
+                        {!item.healthy ? '不可用' : item.available ? '空闲' : '占用中'}
                       </Badge>
                     </div>
                   </div>
@@ -975,7 +1075,8 @@ export function AuroraSettings({
         await configApi.updateAgentConfig(agentConfig)
         toast.success('通用配置保存成功')
       } else if (activeSetting === 'llm-setting') {
-        await configApi.updateLLMConfig(llmConfig)
+        const updated = await configApi.updateLLMConfig(llmConfig)
+        setLlmConfig(updated)
         toast.success('模型提供商配置保存成功')
       } else if (activeSetting === 'search-setting') {
         await configApi.updateSearchConfig(searchConfig)

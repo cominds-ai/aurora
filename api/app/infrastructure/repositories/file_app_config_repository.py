@@ -6,8 +6,10 @@ import yaml
 from filelock import FileLock
 
 from app.application.errors.exceptions import ServerRequestsError
-from app.domain.models.app_config import AppConfig, LLMConfig, AgentConfig, MCPConfig, A2AConfig
+from app.domain.models.app_config import AppConfig, AgentConfig, MCPConfig, A2AConfig, build_default_llm_config, \
+    ensure_builtin_llm_providers
 from app.domain.repositories.app_config_repository import AppConfigRepository
+from core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -24,12 +26,16 @@ class FileAppConfigRepository(AppConfigRepository):
         self._config_path = root_dir.joinpath(root_dir, config_path)
         self._config_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock_file = self._config_path.with_suffix(".lock")  # 文件锁
+        self._settings = get_settings()
 
     def _create_default_app_config_if_not_exists(self):
         """如果配置文件不存在，则使用默认配置并写入到本地文件"""
         if not self._config_path.exists():
             default_app_config = AppConfig(
-                llm_config=LLMConfig(),
+                llm_config=build_default_llm_config(
+                    gemini3_api_key=self._settings.aurora_official_default_gemini3_api_key,
+                    claude_api_key=self._settings.aurora_official_default_claude_api_key,
+                ),
                 agent_config=AgentConfig(),
                 mcp_config=MCPConfig(),
                 a2a_config=A2AConfig(),
@@ -45,7 +51,15 @@ class FileAppConfigRepository(AppConfigRepository):
             # 2.打开配置文件并加载为AppConfig
             with open(self._config_path, "r", encoding="utf-8") as f:
                 data = yaml.safe_load(f)
-                return AppConfig.model_validate(data) if data else None
+                if not data:
+                    return None
+                app_config = AppConfig.model_validate(data)
+                app_config.llm_config = ensure_builtin_llm_providers(
+                    app_config.llm_config,
+                    gemini3_api_key=self._settings.aurora_official_default_gemini3_api_key,
+                    claude_api_key=self._settings.aurora_official_default_claude_api_key,
+                )
+                return app_config
         except Exception as e:
             logger.error(f"读取应用配置失败: {str(e)}")
             raise ServerRequestsError("读取应用配置失败，请稍后尝试")
